@@ -27,8 +27,8 @@ class RecapRepositoryImpl implements RecapRepository {
       ''',
       variables: [
         Variable.withString(keuskupanId),
-        Variable.withDateTime(startDate),
-        Variable.withDateTime(endDate),
+        Variable.withString(startDate.toIso8601String().substring(0, 10)),
+        Variable.withString(endDate.toIso8601String().substring(0, 10)),
       ],
     ).get();
 
@@ -72,8 +72,8 @@ class RecapRepositoryImpl implements RecapRepository {
       ORDER BY p.nama
       ''',
       variables: [
-        Variable.withDateTime(startDate),
-        Variable.withDateTime(endDate),
+        Variable.withString(startDate.toIso8601String().substring(0, 10)),
+        Variable.withString(endDate.toIso8601String().substring(0, 10)),
         Variable.withString(keuskupanId),
       ],
     ).get();
@@ -116,8 +116,8 @@ class RecapRepositoryImpl implements RecapRepository {
       ''',
       variables: [
         Variable.withString(parokiId),
-        Variable.withDateTime(startDate),
-        Variable.withDateTime(endDate),
+        Variable.withString(startDate.toIso8601String().substring(0, 10)),
+        Variable.withString(endDate.toIso8601String().substring(0, 10)),
       ],
     ).get();
 

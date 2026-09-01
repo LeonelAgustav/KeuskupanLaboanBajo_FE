@@ -70,10 +70,10 @@ class _JurnalView extends StatelessWidget {
                 return Card(
                   child: ListTile(
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JurnalDetailScreen(jurnalId: j.id, db: context.read<JurnalCubit>().db))),
-                    title: Text(j.deskripsi ?? 'Tanpa deskripsi', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    title: Text('${j.tanggal.toIso8601String().substring(0, 10)} - ${j.noBukti ?? '-'}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('Tgl: ${j.tanggal.toString().substring(0, 10)} • ${j.noBukti ?? '-'}'),
-                      Text('isSynced: ${j.isSynced ? "✓" : "pending"}', style: TextStyle(color: j.isSynced ? Colors.green : Colors.orange, fontSize: 12)),
+                      Text(j.deskripsi ?? 'Tanpa deskripsi', style: const TextStyle(fontSize: 12)),
+                      Text('isSynced: ${j.isSynced ? "✓" : "pending"}', style: TextStyle(color: j.isSynced ? Colors.green : Colors.orange, fontSize: 10)),
                       if (detils.isNotEmpty) Text('${detils.length} detil • Tap untuk lihat', style: const TextStyle(fontSize: 11, color: Colors.deepPurple)),
                     ]),
                     trailing: Row(mainAxisSize: MainAxisSize.min, children: [

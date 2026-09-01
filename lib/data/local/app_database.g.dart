@@ -2352,17 +2352,15 @@ class $JurnalsTable extends Jurnals with TableInfo<$JurnalsTable, Jurnal> {
     requiredDuringInsert: true,
     $customConstraints: 'REFERENCES keuskupans(id)',
   );
-  static const VerificationMeta _tanggalMeta = const VerificationMeta(
-    'tanggal',
-  );
   @override
-  late final GeneratedColumn<DateTime> tanggal = GeneratedColumn<DateTime>(
-    'tanggal',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: true,
-  );
+  late final GeneratedColumnWithTypeConverter<DateTime, String> tanggal =
+      GeneratedColumn<String>(
+        'tanggal',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<DateTime>($JurnalsTable.$convertertanggal);
   static const VerificationMeta _deskripsiMeta = const VerificationMeta(
     'deskripsi',
   );
@@ -2475,14 +2473,6 @@ class $JurnalsTable extends Jurnals with TableInfo<$JurnalsTable, Jurnal> {
     } else if (isInserting) {
       context.missing(_keuskupanIdMeta);
     }
-    if (data.containsKey('tanggal')) {
-      context.handle(
-        _tanggalMeta,
-        tanggal.isAcceptableOrUnknown(data['tanggal']!, _tanggalMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_tanggalMeta);
-    }
     if (data.containsKey('deskripsi')) {
       context.handle(
         _deskripsiMeta,
@@ -2536,10 +2526,12 @@ class $JurnalsTable extends Jurnals with TableInfo<$JurnalsTable, Jurnal> {
         DriftSqlType.string,
         data['${effectivePrefix}keuskupan_id'],
       )!,
-      tanggal: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}tanggal'],
-      )!,
+      tanggal: $JurnalsTable.$convertertanggal.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}tanggal'],
+        )!,
+      ),
       deskripsi: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}deskripsi'],
@@ -2571,6 +2563,9 @@ class $JurnalsTable extends Jurnals with TableInfo<$JurnalsTable, Jurnal> {
   $JurnalsTable createAlias(String alias) {
     return $JurnalsTable(attachedDatabase, alias);
   }
+
+  static TypeConverter<DateTime, String> $convertertanggal =
+      const DateToStringConverter();
 }
 
 class Jurnal extends DataClass implements Insertable<Jurnal> {
@@ -2599,7 +2594,11 @@ class Jurnal extends DataClass implements Insertable<Jurnal> {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
     map['keuskupan_id'] = Variable<String>(keuskupanId);
-    map['tanggal'] = Variable<DateTime>(tanggal);
+    {
+      map['tanggal'] = Variable<String>(
+        $JurnalsTable.$convertertanggal.toSql(tanggal),
+      );
+    }
     if (!nullToAbsent || deskripsi != null) {
       map['deskripsi'] = Variable<String>(deskripsi);
     }
@@ -2788,7 +2787,7 @@ class JurnalsCompanion extends UpdateCompanion<Jurnal> {
   static Insertable<Jurnal> custom({
     Expression<String>? id,
     Expression<String>? keuskupanId,
-    Expression<DateTime>? tanggal,
+    Expression<String>? tanggal,
     Expression<String>? deskripsi,
     Expression<String>? noBukti,
     Expression<DateTime>? createdAt,
@@ -2847,7 +2846,9 @@ class JurnalsCompanion extends UpdateCompanion<Jurnal> {
       map['keuskupan_id'] = Variable<String>(keuskupanId.value);
     }
     if (tanggal.present) {
-      map['tanggal'] = Variable<DateTime>(tanggal.value);
+      map['tanggal'] = Variable<String>(
+        $JurnalsTable.$convertertanggal.toSql(tanggal.value),
+      );
     }
     if (deskripsi.present) {
       map['deskripsi'] = Variable<String>(deskripsi.value);
@@ -6010,10 +6011,11 @@ class $$JurnalsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get tanggal => $composableBuilder(
-    column: $table.tanggal,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnWithTypeConverterFilters<DateTime, DateTime, String> get tanggal =>
+      $composableBuilder(
+        column: $table.tanggal,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
 
   ColumnFilters<String> get deskripsi => $composableBuilder(
     column: $table.deskripsi,
@@ -6108,7 +6110,7 @@ class $$JurnalsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get tanggal => $composableBuilder(
+  ColumnOrderings<String> get tanggal => $composableBuilder(
     column: $table.tanggal,
     builder: (column) => ColumnOrderings(column),
   );
@@ -6179,7 +6181,7 @@ class $$JurnalsTableAnnotationComposer
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get tanggal =>
+  GeneratedColumnWithTypeConverter<DateTime, String> get tanggal =>
       $composableBuilder(column: $table.tanggal, builder: (column) => column);
 
   GeneratedColumn<String> get deskripsi =>

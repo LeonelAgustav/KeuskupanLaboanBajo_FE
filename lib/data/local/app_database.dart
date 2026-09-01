@@ -3,6 +3,14 @@ import 'package:drift_flutter/drift_flutter.dart';
 
 part 'app_database.g.dart';
 
+class DateToStringConverter extends TypeConverter<DateTime, String> {
+  const DateToStringConverter();
+  @override
+  DateTime fromSql(String fromDb) => DateTime.parse(fromDb);
+  @override
+  String toSql(DateTime value) => value.toIso8601String().substring(0, 10);
+}
+
 class Users extends Table {
   TextColumn get id => text()(); // UUID
   TextColumn get nama => text()();
@@ -67,7 +75,7 @@ class Akuns extends Table {
 class Jurnals extends Table {
   TextColumn get id => text()();
   TextColumn get keuskupanId => text().customConstraint('REFERENCES keuskupans(id)')();
-  DateTimeColumn get tanggal => dateTime()();
+  TextColumn get tanggal => text().map(const DateToStringConverter())(); // YYYY-MM-DD
   TextColumn get deskripsi => text().nullable()();
   TextColumn get noBukti => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
@@ -117,11 +125,18 @@ class AppDatabase extends _$AppDatabase {
             ));
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async => await m.createAll(),
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            // tanggal dari DateTime (int) jadi TEXT YYYY-MM-DD -> drop & recreate
+            await m.deleteTable('jurnals');
+            await m.createTable(jurnals);
+          }
+        },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
         },

@@ -1,4 +1,6 @@
 import 'package:drift/drift.dart' hide Column;
+import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'core/auth/jwt_helper.dart';
 import 'core/auth/token_storage.dart';
@@ -6,6 +8,7 @@ import 'core/network/connectivity_service.dart';
 import 'core/sync/sync_service.dart';
 import 'data/local/app_database.dart';
 import 'features/jurnal/screens/jurnal_list_screen.dart';
+import 'features/master/screens/master_screen.dart';
 import 'features/recap/screens/recap_keuskupan_screen.dart';
 
 // ponytail: 1 codebase untuk app + website, responsive nav
@@ -36,12 +39,20 @@ class _HomeTabsState extends State<HomeTabs> {
   late final AppDatabase _db = AppDatabase();
   late final TokenStorageI _tokens = TokenStorage();
   late final ConnectivityService _conn = ConnectivityService();
+  // API_URL bisa di-override: flutter run --dart-define=API_URL=https://be.up.railway.app
+  String get _apiUrl {
+    const env = String.fromEnvironment('API_URL');
+    if (env.isNotEmpty) return env;
+    if (kIsWeb) return 'http://localhost:8080';
+    return 'http://10.39.48.26:8080'; // HP fisik di WiFi binus.local
+  }
+
   late final SyncService _sync = SyncService(
     db: _db,
     tokenStorage: _tokens,
     connectivity: _conn,
-    // HP fisik pakai IP laptop Wi-Fi binus.local: 10.39.48.26, emulator 10.0.2.2, web localhost
-    pushToServer: SyncService.defaultPush('http://10.39.48.26:8080'),
+    baseUrl: _apiUrl,
+    pushToServer: SyncService.defaultPush(_apiUrl),
   );
   String _syncLog = '';
 
@@ -49,7 +60,15 @@ class _HomeTabsState extends State<HomeTabs> {
   void initState() {
     super.initState();
     _sync.start();
-    _seedFakeTokenIfEmpty();
+    _seedFakeTokenIfEmpty().then((_) {
+      // ponytail: langsung pull saat buka app jika online (biar data server masuk)
+      Future.delayed(const Duration(seconds: 1), () async {
+        if (await _conn.isOnline) {
+          final ok = await _sync.trySync();
+          if (ok && mounted) setState(() => _syncLog = 'Auto-pull OK');
+        }
+      });
+    });
   }
 
   Future<void> _seedFakeTokenIfEmpty() async {
@@ -75,6 +94,7 @@ class _HomeTabsState extends State<HomeTabs> {
       _DashboardTab(db: _db, sync: _sync, log: _syncLog),
       JurnalListScreen(db: _db),
       RecapKeuskupanScreen(db: _db),
+      MasterScreen(db: _db),
       _SettingsTab(db: _db, sync: _sync, tokens: _tokens, onLog: (s) => setState(() => _syncLog = s)),
     ];
 
@@ -94,6 +114,7 @@ class _HomeTabsState extends State<HomeTabs> {
                     NavigationRailDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: Text('Dashboard')),
                     NavigationRailDestination(icon: Icon(Icons.book_outlined), selectedIcon: Icon(Icons.book), label: Text('Jurnal')),
                     NavigationRailDestination(icon: Icon(Icons.assessment_outlined), selectedIcon: Icon(Icons.assessment), label: Text('Rekap')),
+                    NavigationRailDestination(icon: Icon(Icons.category_outlined), selectedIcon: Icon(Icons.category), label: Text('Master')),
                     NavigationRailDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: Text('Settings')),
                   ],
                 ),
@@ -113,6 +134,7 @@ class _HomeTabsState extends State<HomeTabs> {
               NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
               NavigationDestination(icon: Icon(Icons.book_outlined), selectedIcon: Icon(Icons.book), label: 'Jurnal'),
               NavigationDestination(icon: Icon(Icons.assessment_outlined), selectedIcon: Icon(Icons.assessment), label: 'Rekap'),
+              NavigationDestination(icon: Icon(Icons.category_outlined), selectedIcon: Icon(Icons.category), label: 'Master'),
               NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
             ],
           ),
@@ -137,7 +159,6 @@ class _DashboardTabState extends State<_DashboardTab> {
     final hasAccess = await widget.sync.tokenStorage.hasValidAccessToken();
     final online = await widget.sync.connectivity.isOnline;
     final pending = await widget.db.queueCount();
-    // debug biar tidak silent
     debugPrint('Dashboard sync: online=$online hasAccess=$hasAccess pending=$pending');
     final ok = await widget.sync.trySync();
     final msg = ok ? 'Sync OK' : 'Sync gagal: online=$online access=$hasAccess pending=$pending -> cek BE http://10.39.48.26:8080';
@@ -151,7 +172,7 @@ class _DashboardTabState extends State<_DashboardTab> {
       appBar: AppBar(title: const Text('Dashboard')),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
+          constraints: const BoxConstraints(maxWidth: 800),
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -187,11 +208,109 @@ class _DashboardTabState extends State<_DashboardTab> {
                   );
                 },
               ),
+              const SizedBox(height: 16),
+              const _DashboardCharts(),
             ],
           ),
         ),
       ),
     );
+  }
+}
+
+class _DashboardCharts extends StatelessWidget {
+  const _DashboardCharts();
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder(
+      future: Future.wait([
+        // total debit/kredit dari detil_jurnals (YYYY-MM-DD TEXT)
+        Future(() async {
+          final db = AppDatabase();
+          final r = await db.customSelect('SELECT COALESCE(SUM(debit),0) as d, COALESCE(SUM(kredit),0) as k FROM detil_jurnals WHERE deleted_at IS NULL').getSingle();
+          await db.close();
+          return r;
+        }),
+      ]),
+      builder: (c, snap) {
+        if (!snap.hasData) return const SizedBox(height: 180, child: Center(child: CircularProgressIndicator()));
+        // ponytail: pakai fl_chart BarChart sederhana, data dari detil_jurnals
+        return Column(
+          children: [
+            _ChartCard(title: 'Ringkasan Keuangan', child: _BarChart()),
+            const SizedBox(height: 12),
+            _ChartCard(title: 'Tren Bulanan', child: _LineChart()),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ChartCard extends StatelessWidget {
+  final String title;
+  final Widget child;
+  const _ChartCard({required this.title, required this.child});
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          SizedBox(height: 180, child: child),
+        ]),
+      ),
+    );
+  }
+}
+
+class _BarChart extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    // ponytail: fl_chart BarChart 2 bar: Debit vs Kredit, data real dari recap jika ada, fallback 0
+    return FutureBuilder(
+      future: AppDatabase().customSelect('SELECT COALESCE(SUM(debit),0) as d, COALESCE(SUM(kredit),0) as k FROM detil_jurnals WHERE deleted_at IS NULL').getSingle().then((r) => [r.data['d'] as num, r.data['k'] as num]),
+      builder: (c, snap) {
+        final d = snap.data != null ? (snap.data![0] as num).toDouble() : 0.0;
+        final k = snap.data != null ? (snap.data![1] as num).toDouble() : 0.0;
+        final maxY = (d > k ? d : k) * 1.2 + 1000;
+        return _BarChartView(debit: d, kredit: k, maxY: maxY == 0 ? 10000.0 : maxY);
+      },
+    );
+  }
+}
+
+class _BarChartView extends StatelessWidget {
+  final double debit, kredit, maxY;
+  const _BarChartView({required this.debit, required this.kredit, required this.maxY});
+  @override
+  Widget build(BuildContext context) {
+    return BarChart(
+      BarChartData(
+        maxY: maxY,
+        barGroups: [
+          BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: debit, color: Colors.blue, width: 32, borderRadius: BorderRadius.circular(4))]),
+          BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: kredit, color: Colors.green, width: 32, borderRadius: BorderRadius.circular(4))]),
+        ],
+        titlesData: FlTitlesData(
+          bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, _) => Text(v == 0 ? 'Debit' : 'Kredit', style: const TextStyle(fontSize: 11)))),
+          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 60, getTitlesWidget: (v, _) => Text('${(v / 1000).toStringAsFixed(0)}k', style: const TextStyle(fontSize: 9)))),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        gridData: const FlGridData(show: true),
+        borderData: FlBorderData(show: false),
+      ),
+    );
+  }
+}
+
+class _LineChart extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const Center(child: Text('Grafik tren bulanan akan muncul setelah ada data\n(6 bulan terakhir)', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)));
   }
 }
 
