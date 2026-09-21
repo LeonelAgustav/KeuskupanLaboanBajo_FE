@@ -1,17 +1,19 @@
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
+import '../../../core/auth/token_storage.dart';
 import '../../../data/local/app_database.dart';
 import '../../../data/models/recap_models.dart';
 import '../../../data/repository/impl/master_repository_impl.dart';
 import '../../../data/repository/impl/jurnal_repository_impl.dart';
 import '../../../data/repository/impl/recap_repository_impl.dart';
 import '../widgets/recap_widgets.dart';
+import '../utils/pdf_export.dart';
 import 'recap_paroki_detail_screen.dart';
 
 class RecapKeuskupanScreen extends StatefulWidget {
   final AppDatabase? db;
-  const RecapKeuskupanScreen({super.key, this.db});
+  final TokenStorageI? tokenStorage;
+  const RecapKeuskupanScreen({super.key, this.db, this.tokenStorage});
   @override
   State<RecapKeuskupanScreen> createState() => _RecapKeuskupanScreenState();
 }
@@ -22,20 +24,43 @@ class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
   late final KeuskupanRepositoryImpl _keuskupanRepo = KeuskupanRepositoryImpl(_db);
   bool _ownsDb = false;
 
-  DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  DateTime _selectedDate = DateTime(DateTime.now().year, DateTime.now().month);
+  PeriodMode _mode = PeriodMode.month;
   Keuskupan? _selectedKeuskupan;
   List<Keuskupan> _keuskupanList = [];
+  int? _memberParokiId; // untuk MEMBER: filter hanya 1 paroki
+  String? _memberParokiNama;
 
   bool _loading = true;
   String? _error;
   RecapKeuskupanResult? _recapResult;
   List<RecapParokiSummary> _parokiList = [];
+  List<MonthlyRecap> _monthlyData = [];
+  List<WeeklyRecap> _weeklyData = [];
 
   @override
   void initState() {
     super.initState();
     _ownsDb = widget.db == null;
+    _initMemberFilter();
     _loadData();
+  }
+
+  Future<void> _initMemberFilter() async {
+    final ts = widget.tokenStorage;
+    if (ts == null) return;
+    try {
+      final pid = await ts.getCurrentParokiId();
+      if (pid != null && pid > 0) _memberParokiId = pid;
+      // Ambil nama paroki dari DB lokal
+      if (_memberParokiId != null) {
+        final rows = await _db.customSelect(
+          'SELECT nama FROM parokis WHERE id = ? AND deleted_at IS NULL',
+          variables: [Variable.withInt(_memberParokiId!)],
+        ).get();
+        if (rows.isNotEmpty) _memberParokiNama = rows.first.read<String>('nama');
+      }
+    } catch (_) {}
   }
 
   @override
@@ -44,8 +69,19 @@ class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
     super.dispose();
   }
 
-  DateTime get _startDate => _selectedMonth;
-  DateTime get _endDate => DateTime(_selectedMonth.year, _selectedMonth.month + 1);
+  DateTime get _startDate {
+    if (_mode == PeriodMode.year) {
+      return DateTime(_selectedDate.year, 1, 1);
+    }
+    return DateTime(_selectedDate.year, _selectedDate.month, 1);
+  }
+
+  DateTime get _endDate {
+    if (_mode == PeriodMode.year) {
+      return DateTime(_selectedDate.year + 1, 1, 1);
+    }
+    return DateTime(_selectedDate.year, _selectedDate.month + 1, 1);
+  }
 
   Future<void> _loadData() async {
     setState(() { _loading = true; _error = null; });
@@ -65,14 +101,33 @@ class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
 
       final recap = await _recapRepo.getKeuskupanRecap(
         _selectedKeuskupan!.id, _startDate, _endDate,
+        parokiId: _memberParokiId,
       );
       final parokiList = await _recapRepo.getParokiRecapList(
         _selectedKeuskupan!.id, _startDate, _endDate,
+        parokiId: _memberParokiId,
       );
+
+      // Load monthly data for yearly mode, weekly for monthly mode
+      List<MonthlyRecap> monthlyData = [];
+      List<WeeklyRecap> weeklyData = [];
+      if (_mode == PeriodMode.year) {
+        monthlyData = await _recapRepo.getMonthlyRecap(
+          _selectedKeuskupan!.id, _selectedDate.year,
+          parokiId: _memberParokiId,
+        );
+      } else {
+        weeklyData = await _recapRepo.getWeeklyRecap(
+          _selectedKeuskupan!.id, _selectedDate.year, _selectedDate.month,
+          parokiId: _memberParokiId,
+        );
+      }
 
       setState(() {
         _recapResult = recap;
         _parokiList = parokiList;
+        _monthlyData = monthlyData;
+        _weeklyData = weeklyData;
         _loading = false;
       });
     } catch (e) {
@@ -80,8 +135,13 @@ class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
     }
   }
 
-  void _changeMonth(int delta) {
-    _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + delta);
+  void _changeDate(DateTime newDate) {
+    _selectedDate = newDate;
+    _loadData();
+  }
+
+  void _toggleMode(PeriodMode mode) {
+    _mode = mode;
     _loadData();
   }
 
@@ -90,156 +150,11 @@ class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
       builder: (_) => RecapParokiDetailScreen(
         parokiId: paroki.parokiId,
         parokiNama: paroki.parokiNama,
-        selectedMonth: _selectedMonth,
+        selectedDate: _selectedDate,
+        mode: _mode,
         db: _db,
       ),
     ));
-  }
-
-  // ── Seed sample data untuk testing ──────────────────────────────────────
-  Future<void> _seedSampleData() async {
-    final uuid = const Uuid();
-    final keuskupanRepo = KeuskupanRepositoryImpl(_db);
-    final parokiRepo = ParokiRepositoryImpl(_db);
-    final jenisRepo = JenisRepositoryImpl(_db);
-    final akunRepo = AkunRepositoryImpl(_db);
-    final jurnalRepo = JurnalRepositoryImpl(_db);
-
-    // Keuskupan
-    final kId = await keuskupanRepo.create(
-      nama: 'Keuskupan Labuan Bajo', alamat: 'Labuan Bajo, NTT',
-    );
-
-    // Parokis
-    final p1 = await parokiRepo.create(nama: 'Paroki St. Yosep', alamat: 'Labuan Bajo', keuskupanId: kId);
-    final p2 = await parokiRepo.create(nama: 'Paroki Maria Bunda', alamat: 'Ruteng', keuskupanId: kId);
-    final p3 = await parokiRepo.create(nama: 'Paroki Kristus Raja', alamat: 'Borong', keuskupanId: kId);
-
-    // Jenis akun
-    final jPendapatan = await jenisRepo.create(nama: 'Pendapatan');
-    final jBeban = await jenisRepo.create(nama: 'Beban');
-
-    // Akuns
-    final aKolekte = await akunRepo.create(kode: '4100', nama: 'Kolekte', jenisId: jPendapatan);
-    final aSumbangan = await akunRepo.create(kode: '4200', nama: 'Sumbangan', jenisId: jPendapatan);
-    final aGaji = await akunRepo.create(kode: '5100', nama: 'Gaji Pegawai', jenisId: jBeban);
-    final aListrik = await akunRepo.create(kode: '5200', nama: 'Listrik & Air', jenisId: jBeban);
-
-    final now = DateTime.now();
-    final thisMonth = DateTime(now.year, now.month);
-
-    // Jurnal 1 — Paroki St. Yosep: kolekte masuk
-    await jurnalRepo.create(
-      keuskupanId: kId,
-      tanggal: DateTime(thisMonth.year, thisMonth.month, 5),
-      deskripsi: 'Penerimaan Kolekte Minggu I',
-      noBukti: 'BKM-001',
-      detils: [
-        DetilJurnalsCompanion(
-          id: Value(uuid.v4()), jurnalId: const Value(''), akunId: Value(aKolekte),
-          parokiId: Value(p1), kredit: const Value(5000000),
-        ),
-      ],
-    );
-
-    // Jurnal 2 — Paroki St. Yosep: sumbangan masuk
-    await jurnalRepo.create(
-      keuskupanId: kId,
-      tanggal: DateTime(thisMonth.year, thisMonth.month, 10),
-      deskripsi: 'Sumbangan Donatur',
-      noBukti: 'BKM-002',
-      detils: [
-        DetilJurnalsCompanion(
-          id: Value(uuid.v4()), jurnalId: const Value(''), akunId: Value(aSumbangan),
-          parokiId: Value(p1), kredit: const Value(3000000),
-        ),
-      ],
-    );
-
-    // Jurnal 3 — Paroki St. Yosep: bayar gaji
-    await jurnalRepo.create(
-      keuskupanId: kId,
-      tanggal: DateTime(thisMonth.year, thisMonth.month, 15),
-      deskripsi: 'Pembayaran Gaji',
-      noBukti: 'BKK-001',
-      detils: [
-        DetilJurnalsCompanion(
-          id: Value(uuid.v4()), jurnalId: const Value(''), akunId: Value(aGaji),
-          parokiId: Value(p1), debit: const Value(4000000),
-        ),
-      ],
-    );
-
-    // Jurnal 4 — Paroki Maria Bunda: kolekte
-    await jurnalRepo.create(
-      keuskupanId: kId,
-      tanggal: DateTime(thisMonth.year, thisMonth.month, 7),
-      deskripsi: 'Kolekte Minggu I',
-      noBukti: 'BKM-003',
-      detils: [
-        DetilJurnalsCompanion(
-          id: Value(uuid.v4()), jurnalId: const Value(''), akunId: Value(aKolekte),
-          parokiId: Value(p2), kredit: const Value(7000000),
-        ),
-      ],
-    );
-
-    // Jurnal 5 — Paroki Maria Bunda: listrik
-    await jurnalRepo.create(
-      keuskupanId: kId,
-      tanggal: DateTime(thisMonth.year, thisMonth.month, 20),
-      deskripsi: 'Bayar Listrik & Air',
-      noBukti: 'BKK-002',
-      detils: [
-        DetilJurnalsCompanion(
-          id: Value(uuid.v4()), jurnalId: const Value(''), akunId: Value(aListrik),
-          parokiId: Value(p2), debit: const Value(2500000),
-        ),
-      ],
-    );
-
-    // Jurnal 6 — Paroki Kristus Raja: kolekte + sumbangan
-    await jurnalRepo.create(
-      keuskupanId: kId,
-      tanggal: DateTime(thisMonth.year, thisMonth.month, 12),
-      deskripsi: 'Kolekte & Sumbangan',
-      noBukti: 'BKM-004',
-      detils: [
-        DetilJurnalsCompanion(
-          id: Value(uuid.v4()), jurnalId: const Value(''), akunId: Value(aKolekte),
-          parokiId: Value(p3), kredit: const Value(4000000),
-        ),
-        DetilJurnalsCompanion(
-          id: Value(uuid.v4()), jurnalId: const Value(''), akunId: Value(aSumbangan),
-          parokiId: Value(p3), kredit: const Value(2000000),
-        ),
-      ],
-    );
-
-    // Jurnal 7 — Paroki Kristus Raja: gaji
-    await jurnalRepo.create(
-      keuskupanId: kId,
-      tanggal: DateTime(thisMonth.year, thisMonth.month, 25),
-      deskripsi: 'Gaji Pegawai',
-      noBukti: 'BKK-003',
-      detils: [
-        DetilJurnalsCompanion(
-          id: Value(uuid.v4()), jurnalId: const Value(''), akunId: Value(aGaji),
-          parokiId: Value(p3), debit: const Value(3500000),
-        ),
-      ],
-    );
-
-    // Reload
-    _keuskupanList = [];
-    _selectedKeuskupan = null;
-    await _loadData();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sample data berhasil di-seed!')),
-      );
-    }
   }
 
   // ── Build ───────────────────────────────────────────────────────────────
@@ -248,8 +163,24 @@ class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Rekap Keuskupan'),
+        title: Text(_memberParokiNama != null ? 'Rekap $_memberParokiNama' : 'Rekap Keuskupan'),
         actions: [
+          if (_recapResult != null)
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf),
+              tooltip: 'Export PDF',
+              onPressed: () => exportLaporanPdf(
+                judul: 'Laporan Keuangan Keuskupan',
+                periode: _mode == PeriodMode.year
+                    ? '${_selectedDate.year}'
+                    : '${monthNamesId[_selectedDate.month - 1]} ${_selectedDate.year}',
+                baris: [
+                  for (final p in _parokiList) PdfBaris(p.parokiNama, debit: p.totalDebit, kredit: p.totalKredit),
+                ],
+                totalDebit: _recapResult!.totalDebit,
+                totalKredit: _recapResult!.totalKredit,
+              ),
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadData,
@@ -257,13 +188,6 @@ class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
         ],
       ),
       body: _buildBody(),
-      floatingActionButton: (_selectedKeuskupan == null && !_loading)
-          ? FloatingActionButton.extended(
-              onPressed: _seedSampleData,
-              icon: const Icon(Icons.add),
-              label: const Text('Seed Sample'),
-            )
-          : null,
     );
   }
 
@@ -298,7 +222,7 @@ class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Tap tombol "Seed Sample" untuk menambahkan data contoh',
+              'Tambahkan data lewat menu Master',
               style: TextStyle(fontSize: 13, color: Colors.grey[500]),
               textAlign: TextAlign.center,
             ),
@@ -319,8 +243,8 @@ class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
           if (_keuskupanList.length > 1)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: DropdownButtonFormField<String>(
-                value: _selectedKeuskupan!.id,
+              child: DropdownButtonFormField<int>(
+                initialValue: _selectedKeuskupan!.id,
                 decoration: const InputDecoration(
                   labelText: 'Keuskupan',
                   border: OutlineInputBorder(),
@@ -337,17 +261,19 @@ class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
               ),
             ),
 
-          // Month picker
+          // Period picker
           MonthYearPicker(
-            selectedMonth: _selectedMonth,
-            onChangeMonth: _changeMonth,
+            selectedDate: _selectedDate,
+            onDateChanged: _changeDate,
+            mode: _mode,
+            onModeChanged: _toggleMode,
           ),
 
           // Summary cards
           if (_recapResult != null)
             SummaryRow(
-              totalDebit: _recapResult!.totalDebit,
-              totalKredit: _recapResult!.totalKredit,
+              totalPendapatan: _recapResult!.totalKredit, // Pendapatan = Kredit
+              totalPengeluaran: _recapResult!.totalDebit, // Pengeluaran = Debit
             ),
 
           const SizedBox(height: 16),
@@ -381,6 +307,47 @@ class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
               summary: p,
               onTap: () => _goToParokiDetail(p),
             )),
+
+          // Monthly table for yearly mode
+          if (_mode == PeriodMode.year && _monthlyData.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Rekap Bulanan (${_selectedDate.year})',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            MonthlyRecapTable(
+              monthlyData: _monthlyData,
+              totalPendapatan: _recapResult?.totalKredit ?? 0,
+              totalPengeluaran: _recapResult?.totalDebit ?? 0,
+            ),
+          ],
+          // Weekly table for monthly mode
+          if (_mode == PeriodMode.month && _weeklyData.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Rekap Mingguan (${monthNamesId[_selectedDate.month - 1]} ${_selectedDate.year})',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            WeeklyRecapTable(
+              weeklyData: _weeklyData,
+              totalPendapatan: _recapResult?.totalKredit ?? 0,
+              totalPengeluaran: _recapResult?.totalDebit ?? 0,
+            ),
+          ],
 
           const SizedBox(height: 80), // padding for FAB
             ],

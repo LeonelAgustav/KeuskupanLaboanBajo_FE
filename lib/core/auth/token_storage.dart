@@ -9,6 +9,8 @@ abstract class TokenStorageI {
   Future<bool> hasValidAccessToken();
   Future<bool> hasValidRefreshToken();
   Future<void> clear();
+  Future<int?> getCurrentUserId(); // dari JWT payload
+  Future<int?> getCurrentParokiId(); // dari JWT payload
 }
 
 class TokenStorage implements TokenStorageI {
@@ -47,6 +49,26 @@ class TokenStorage implements TokenStorageI {
     await _s.delete(key: _kAccess);
     await _s.delete(key: _kRefresh);
   }
+
+  @override
+  Future<int?> getCurrentUserId() async {
+    final t = await getAccessToken() ?? await getRefreshToken();
+    if (t == null) return null;
+    try {
+      final payload = JwtHelper.decodePayload(t);
+      final userId = payload['user_id'] ?? payload['sub'];
+      return userId is int ? userId : int.tryParse(userId.toString());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<int?> getCurrentParokiId() async {
+    final t = await getAccessToken() ?? await getRefreshToken();
+    if (t == null) return null;
+    return JwtHelper.getParokiId(t);
+  }
 }
 
 // untuk unit test tanpa platform channel
@@ -71,5 +93,24 @@ class InMemoryTokenStorage implements TokenStorageI {
   Future<void> clear() async {
     _access = null;
     _refresh = null;
+  }
+  @override
+  Future<int?> getCurrentUserId() async {
+    final t = _access ?? _refresh;
+    if (t == null) return null;
+    try {
+      final payload = JwtHelper.decodePayload(t);
+      final userId = payload['user_id'] ?? payload['sub'];
+      return userId is int ? userId : int.tryParse(userId.toString());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<int?> getCurrentParokiId() async {
+    final t = _access ?? _refresh;
+    if (t == null) return null;
+    return JwtHelper.getParokiId(t);
   }
 }

@@ -9,12 +9,10 @@ void main() {
     final db = AppDatabase(NativeDatabase.memory());
     final uuid = const Uuid();
 
-    final keuskupanId = uuid.v4();
-    await db.into(db.keuskupans).insert(KeuskupansCompanion.insert(
-      id: keuskupanId,
+final keuskupanId = (await db.into(db.keuskupans).insertReturning(KeuskupansCompanion.insert(
       nama: 'Keuskupan Labuan Bajo',
       alamat: 'Jl Test',
-    ));
+    ))).id;
 
     final jurnalId = uuid.v4();
     await db.insertJurnalLocal(
@@ -51,24 +49,18 @@ void main() {
     final db = AppDatabase(NativeDatabase.memory());
     final uuid = const Uuid();
 
-    final keuskupanId = uuid.v4();
-    await db.into(db.keuskupans).insert(KeuskupansCompanion.insert(id: keuskupanId, nama: 'K1', alamat: 'A1'));
+final keuskupanId = (await db.into(db.keuskupans).insertReturning(KeuskupansCompanion.insert(nama: 'K1', alamat: 'A1'))).id;
 
-    final jenisId = uuid.v4();
-    await db.into(db.jenis).insert(JenisCompanion.insert(id: jenisId, nama: 'ASET'));
+    final jenisId = (await db.into(db.jenis).insertReturning(JenisCompanion.insert(nama: 'ASET'))).id;
 
-    final akunId = uuid.v4();
-    await db.into(db.akuns).insert(AkunsCompanion.insert(id: akunId, kode: '101', nama: 'Kas', jenisId: jenisId));
+    final akunId = (await db.into(db.akuns).insertReturning(AkunsCompanion.insert(kode: '101', nama: 'Kas', jenisId: jenisId))).id;
 
-    final parokiId = uuid.v4();
-    await db.into(db.parokis).insert(ParokisCompanion.insert(id: parokiId, nama: 'Paroki St Maria', alamat: 'Labuan', keuskupanId: keuskupanId));
+    final parokiId = (await db.into(db.parokis).insertReturning(ParokisCompanion.insert(nama: 'Paroki St Maria', alamat: 'Labuan', keuskupanId: keuskupanId))).id;
 
     final jurnalId = uuid.v4();
     await db.insertJurnalLocal(id: jurnalId, keuskupanId: keuskupanId, tanggal: DateTime.now(), deskripsi: 'test detil');
 
-    final detilId = uuid.v4();
     await db.into(db.detilJurnals).insert(DetilJurnalsCompanion.insert(
-      id: detilId,
       jurnalId: jurnalId,
       akunId: akunId,
       parokiId: parokiId,

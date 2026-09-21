@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme.dart';
 import '../../../data/local/app_database.dart';
 import '../../../data/models/recap_models.dart';
 import '../../../data/repository/impl/recap_repository_impl.dart';
 import '../widgets/recap_widgets.dart';
+import '../utils/pdf_export.dart';
 
 class RecapParokiDetailScreen extends StatefulWidget {
-  final String parokiId;
+  final int parokiId;
   final String parokiNama;
-  final DateTime selectedMonth;
+  final DateTime selectedDate;
+  final PeriodMode mode;
   final AppDatabase? db;
 
   const RecapParokiDetailScreen({
     super.key,
     required this.parokiId,
     required this.parokiNama,
-    required this.selectedMonth,
+    required this.selectedDate,
+    required this.mode,
     this.db,
   });
 
@@ -27,12 +31,15 @@ class _RecapParokiDetailScreenState extends State<RecapParokiDetailScreen> {
   late final RecapRepositoryImpl _recapRepo = RecapRepositoryImpl(_db);
   bool _ownsDb = false;
 
-  late DateTime _selectedMonth = widget.selectedMonth;
+  late DateTime _selectedDate = widget.selectedDate;
+  late PeriodMode _mode = widget.mode;
   bool _loading = true;
   String? _error;
   double _totalDebit = 0;
   double _totalKredit = 0;
   List<RecapAkunDetail> _details = [];
+  List<MonthlyRecap> _monthlyData = [];
+  List<WeeklyRecap> _weeklyData = [];
 
   // Group details by jenis
   Map<String, List<RecapAkunDetail>> get _groupedDetails {
@@ -56,8 +63,19 @@ class _RecapParokiDetailScreenState extends State<RecapParokiDetailScreen> {
     super.dispose();
   }
 
-  DateTime get _startDate => _selectedMonth;
-  DateTime get _endDate => DateTime(_selectedMonth.year, _selectedMonth.month + 1);
+  DateTime get _startDate {
+    if (_mode == PeriodMode.year) {
+      return DateTime(_selectedDate.year, 1, 1);
+    }
+    return DateTime(_selectedDate.year, _selectedDate.month, 1);
+  }
+
+  DateTime get _endDate {
+    if (_mode == PeriodMode.year) {
+      return DateTime(_selectedDate.year + 1, 1, 1);
+    }
+    return DateTime(_selectedDate.year, _selectedDate.month + 1, 1);
+  }
 
   Future<void> _loadData() async {
     setState(() { _loading = true; _error = null; });
@@ -73,10 +91,20 @@ class _RecapParokiDetailScreenState extends State<RecapParokiDetailScreen> {
         kredit += d.totalKredit;
       }
 
+      List<MonthlyRecap> monthlyData = [];
+      List<WeeklyRecap> weeklyData = [];
+      if (_mode == PeriodMode.year) {
+        monthlyData = await _recapRepo.getMonthlyRecap(widget.parokiId, _selectedDate.year);
+      } else {
+        weeklyData = await _recapRepo.getWeeklyRecap(widget.parokiId, _selectedDate.year, _selectedDate.month);
+      }
+
       setState(() {
         _details = details;
         _totalDebit = debit;
         _totalKredit = kredit;
+        _monthlyData = monthlyData;
+        _weeklyData = weeklyData;
         _loading = false;
       });
     } catch (e) {
@@ -84,9 +112,62 @@ class _RecapParokiDetailScreenState extends State<RecapParokiDetailScreen> {
     }
   }
 
-  void _changeMonth(int delta) {
-    _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + delta);
+  void _changeDate(DateTime newDate) {
+    _selectedDate = newDate;
     _loadData();
+  }
+
+  void _toggleMode(PeriodMode mode) {
+    _mode = mode;
+    _loadData();
+  }
+
+  void _exportDetailPdf() {
+    final baris = <PdfBaris>[];
+    _groupedDetails.forEach((jenis, items) {
+      baris.add(PdfBaris(jenis, isHeader: true));
+      for (final d in items) {
+        baris.add(PdfBaris('${d.akunKode} - ${d.akunNama}', debit: d.totalDebit, kredit: d.totalKredit));
+      }
+    });
+    final periode = _mode == PeriodMode.year
+        ? '${_selectedDate.year}'
+        : '${monthNamesId[_selectedDate.month - 1]} ${_selectedDate.year}';
+    exportLaporanPdf(
+      judul: 'Laporan Keuangan Paroki ${widget.parokiNama}',
+      periode: periode,
+      baris: baris,
+      totalDebit: _totalDebit,
+      totalKredit: _totalKredit,
+    );
+  }
+
+  void _exportMonthlyPdf() {
+    final baris = <PdfBaris>[
+      for (final m in _monthlyData)
+        PdfBaris(m.namaBulan, debit: m.totalDebit, kredit: m.totalKredit),
+    ];
+    exportLaporanPdf(
+      judul: 'Rekap Bulanan Paroki ${widget.parokiNama}',
+      periode: '${_selectedDate.year}',
+      baris: baris,
+      totalDebit: _totalDebit,
+      totalKredit: _totalKredit,
+    );
+  }
+
+  void _exportWeeklyPdf() {
+    final baris = <PdfBaris>[
+      for (final w in _weeklyData)
+        PdfBaris('${w.namaMinggu} (tgl ${w.rentang})', debit: w.totalDebit, kredit: w.totalKredit),
+    ];
+    exportLaporanPdf(
+      judul: 'Rekap Mingguan Paroki ${widget.parokiNama}',
+      periode: '${monthNamesId[_selectedDate.month - 1]} ${_selectedDate.year}',
+      baris: baris,
+      totalDebit: _totalDebit,
+      totalKredit: _totalKredit,
+    );
   }
 
   @override
@@ -94,6 +175,27 @@ class _RecapParokiDetailScreenState extends State<RecapParokiDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Rekap ${widget.parokiNama}'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf),
+            tooltip: 'Export PDF - Detail Akun',
+            onPressed: (_loading || _details.isEmpty)
+                ? null
+                : () => _exportDetailPdf(),
+          ),
+          if (_mode == PeriodMode.year && _monthlyData.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.calendar_month),
+              tooltip: 'Export PDF - Rekap Bulanan',
+              onPressed: () => _exportMonthlyPdf(),
+            ),
+          if (_mode == PeriodMode.month && _weeklyData.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.calendar_view_week),
+              tooltip: 'Export PDF - Rekap Mingguan',
+              onPressed: () => _exportWeeklyPdf(),
+            ),
+        ],
       ),
       body: _buildBody(),
     );
@@ -118,23 +220,25 @@ class _RecapParokiDetailScreenState extends State<RecapParokiDetailScreen> {
       );
     }
 
-    return RefreshIndicator(
+return RefreshIndicator(
       onRefresh: _loadData,
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 900),
           child: ListView(
             children: [
-          // Month picker
-          MonthYearPicker(
-            selectedMonth: _selectedMonth,
-            onChangeMonth: _changeMonth,
-          ),
+              // Period picker
+              MonthYearPicker(
+                selectedDate: _selectedDate,
+                onDateChanged: _changeDate,
+                mode: _mode,
+                onModeChanged: _toggleMode,
+              ),
 
-          // Summary cards
+              // Summary cards
           SummaryRow(
-            totalDebit: _totalDebit,
-            totalKredit: _totalKredit,
+            totalPendapatan: _totalKredit, // Pendapatan = Kredit
+            totalPengeluaran: _totalDebit, // Pengeluaran = Debit
           ),
 
           const SizedBox(height: 20),
@@ -165,6 +269,47 @@ class _RecapParokiDetailScreenState extends State<RecapParokiDetailScreen> {
           else
             ..._groupedDetails.entries.map((entry) => _buildJenisGroup(entry.key, entry.value)),
 
+          // Monthly table for yearly mode
+          if (_mode == PeriodMode.year && _monthlyData.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Rekap Bulanan (${_selectedDate.year})',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            MonthlyRecapTable(
+              monthlyData: _monthlyData,
+              totalPendapatan: _totalKredit,
+              totalPengeluaran: _totalDebit,
+            ),
+          ],
+          // Weekly table for monthly mode
+          if (_mode == PeriodMode.month && _weeklyData.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Rekap Mingguan (${monthNamesId[_selectedDate.month - 1]} ${_selectedDate.year})',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            WeeklyRecapTable(
+              weeklyData: _weeklyData,
+              totalPendapatan: _totalKredit,
+              totalPengeluaran: _totalDebit,
+            ),
+          ],
+
           const SizedBox(height: 32),
             ],
           ),
@@ -193,7 +338,7 @@ class _RecapParokiDetailScreenState extends State<RecapParokiDetailScreen> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
-              color: Colors.deepPurple.shade50,
+              color: ungu.withValues(alpha: 0.08),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
             ),
             child: Row(
@@ -201,22 +346,24 @@ class _RecapParokiDetailScreenState extends State<RecapParokiDetailScreen> {
                 Expanded(
                   child: Text(
                     jenisNama.toUpperCase(),
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
-                      color: Colors.deepPurple.shade700,
+                      color: ungu,
                     ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Text(
-                  'D: ${formatRupiah(subDebit)}',
-                  style: TextStyle(fontSize: 11, color: Colors.blue.shade700),
-                ),
                 const SizedBox(width: 8),
-                Text(
-                  'K: ${formatRupiah(subKredit)}',
-                  style: TextStyle(fontSize: 11, color: Colors.green.shade700),
-                ),
+                Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(
+                  'Pendapatan: ${formatRupiah(subKredit)}',
+                  style: const TextStyle(fontSize: 11, color: hijauPendapatan),
+                ))),
+                const SizedBox(width: 8),
+                Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(
+                  'Pengeluaran: ${formatRupiah(subDebit)}',
+                  style: const TextStyle(fontSize: 11, color: merahPengeluaran),
+                ))),
               ],
             ),
           ),

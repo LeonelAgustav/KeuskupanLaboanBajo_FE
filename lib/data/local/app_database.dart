@@ -24,7 +24,7 @@ class Users extends Table {
 }
 
 class Keuskupans extends Table {
-  TextColumn get id => text()();
+  IntColumn get id => integer().autoIncrement()();
   TextColumn get nama => text()();
   TextColumn get alamat => text()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
@@ -36,10 +36,10 @@ class Keuskupans extends Table {
 }
 
 class Parokis extends Table {
-  TextColumn get id => text()();
+  IntColumn get id => integer().autoIncrement()();
   TextColumn get nama => text()();
   TextColumn get alamat => text()();
-  TextColumn get keuskupanId => text().customConstraint('REFERENCES keuskupans(id)')();
+  IntColumn get keuskupanId => integer().customConstraint('REFERENCES keuskupans(id)')();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get deletedAt => dateTime().nullable()();
@@ -49,7 +49,7 @@ class Parokis extends Table {
 }
 
 class Jenis extends Table {
-  TextColumn get id => text()();
+  IntColumn get id => integer().autoIncrement()();
   TextColumn get nama => text()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
@@ -60,10 +60,10 @@ class Jenis extends Table {
 }
 
 class Akuns extends Table {
-  TextColumn get id => text()();
+  IntColumn get id => integer().autoIncrement()();
   TextColumn get kode => text()();
   TextColumn get nama => text()();
-  TextColumn get jenisId => text().customConstraint('REFERENCES jenis(id)')();
+  IntColumn get jenisId => integer().customConstraint('REFERENCES jenis(id)')();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get deletedAt => dateTime().nullable()();
@@ -74,10 +74,13 @@ class Akuns extends Table {
 
 class Jurnals extends Table {
   TextColumn get id => text()();
-  TextColumn get keuskupanId => text().customConstraint('REFERENCES keuskupans(id)')();
+  IntColumn get keuskupanId => integer().customConstraint('REFERENCES keuskupans(id)')();
   TextColumn get tanggal => text().map(const DateToStringConverter())(); // YYYY-MM-DD
   TextColumn get deskripsi => text().nullable()();
   TextColumn get noBukti => text().nullable()();
+  IntColumn get createdBy => integer().nullable()();
+  IntColumn get updatedBy => integer().nullable()();
+  IntColumn get deletedBy => integer().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get deletedAt => dateTime().nullable()();
@@ -87,13 +90,16 @@ class Jurnals extends Table {
 }
 
 class DetilJurnals extends Table {
-  TextColumn get id => text()();
+  IntColumn get id => integer().autoIncrement()();
   TextColumn get jurnalId => text().customConstraint('REFERENCES jurnals(id)')();
-  TextColumn get akunId => text().customConstraint('REFERENCES akuns(id)')();
-  TextColumn get parokiId => text().customConstraint('REFERENCES parokis(id)')();
+  IntColumn get akunId => integer().customConstraint('REFERENCES akuns(id)')();
+  IntColumn get parokiId => integer().customConstraint('REFERENCES parokis(id)')();
   RealColumn get debit => real().nullable().withDefault(const Constant(0))();
   RealColumn get kredit => real().nullable().withDefault(const Constant(0))();
   TextColumn get keterangan => text().nullable()();
+  IntColumn get createdBy => integer().nullable()();
+  IntColumn get updatedBy => integer().nullable()();
+  IntColumn get deletedBy => integer().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get deletedAt => dateTime().nullable()();
@@ -112,7 +118,18 @@ class SyncQueues extends Table {
   IntColumn get retryCount => integer().withDefault(const Constant(0))();
 }
 
-@DriftDatabase(tables: [Users, Keuskupans, Parokis, Jenis, Akuns, Jurnals, DetilJurnals, SyncQueues])
+class Roles extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get nama => text()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+  BoolColumn get isSynced => boolean().withDefault(const Constant(false))(); // keterangan sudah terkirim - tambahan client
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DriftDatabase(tables: [Users, Keuskupans, Parokis, Jenis, Akuns, Jurnals, DetilJurnals, SyncQueues, Roles])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? e])
       : super(e ??
@@ -125,7 +142,7 @@ class AppDatabase extends _$AppDatabase {
             ));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -135,6 +152,23 @@ class AppDatabase extends _$AppDatabase {
             // tanggal dari DateTime (int) jadi TEXT YYYY-MM-DD -> drop & recreate
             await m.deleteTable('jurnals');
             await m.createTable(jurnals);
+          }
+          if (from < 3) {
+            // master id text -> int autoincrement: drop semua & recreate ulang
+            for (final t in allTables) {
+              await m.deleteTable(t.actualTableName);
+            }
+            await m.createAll();
+          }
+          if (from < 4) {
+            await m.addColumn(jurnals, jurnals.createdBy);
+            await m.addColumn(detilJurnals, detilJurnals.createdBy);
+          }
+          if (from < 5) {
+            await m.addColumn(jurnals, jurnals.updatedBy);
+            await m.addColumn(jurnals, jurnals.deletedBy);
+            await m.addColumn(detilJurnals, detilJurnals.updatedBy);
+            await m.addColumn(detilJurnals, detilJurnals.deletedBy);
           }
         },
         beforeOpen: (details) async {
@@ -150,6 +184,11 @@ class AppDatabase extends _$AppDatabase {
     return q.data['c'] as int;
   }
 
+  Future<int> conflictCount() async {
+    final q = await customSelect('SELECT COUNT(*) as c FROM sync_queues WHERE retry_count >= 2').getSingle();
+    return q.data['c'] as int;
+  }
+
   Future<void> enqueue(String table, String rowId, String op, String payload) =>
       into(syncQueues).insert(SyncQueuesCompanion.insert(targetTable: table, rowId: rowId, operation: op, payload: payload));
 
@@ -157,7 +196,7 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> insertJurnalLocal({
     required String id,
-    required String keuskupanId,
+    required int keuskupanId,
     required DateTime tanggal,
     String? deskripsi,
     String? noBukti,
@@ -170,7 +209,7 @@ class AppDatabase extends _$AppDatabase {
       noBukti: Value(noBukti),
     ));
     // ponytail: payload lengkap biar BE bisa upsert (keuskupan_id wajib FK)
-    final payload = '{"id":"$id","keuskupan_id":"$keuskupanId","tanggal":"${tanggal.toIso8601String()}",'
+    final payload = '{"id":"$id","keuskupan_id":$keuskupanId,"tanggal":"${tanggal.toIso8601String()}",'
         '"deskripsi":${deskripsi == null ? 'null' : '"${deskripsi.replaceAll('"', '\\"')}"'},'
         '"no_bukti":${noBukti == null ? 'null' : '"${noBukti.replaceAll('"', '\\"')}"'}}';
     await enqueue('jurnals', id, 'insert', payload);

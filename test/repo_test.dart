@@ -4,12 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:keuskupanlaboanbajo_fe/data/local/app_database.dart';
 import 'package:keuskupanlaboanbajo_fe/data/repository/impl/jurnal_repository_impl.dart';
 import 'package:keuskupanlaboanbajo_fe/data/repository/impl/master_repository_impl.dart';
+import 'package:keuskupanlaboanbajo_fe/core/auth/token_storage.dart';
 
 void main() {
   group('Step 2 Repository - local first', () {
     test('jurnal repo create + get + soft delete', () async {
       final db = AppDatabase(NativeDatabase.memory());
-      final jurnalRepo = JurnalRepositoryImpl(db);
+      final jurnalRepo = JurnalRepositoryImpl(db, tokenStorage: InMemoryTokenStorage());
       final keuskupanRepo = KeuskupanRepositoryImpl(db);
       final kId = await keuskupanRepo.create(nama: 'K1', alamat: 'A1');
       final jId = await jurnalRepo.create(keuskupanId: kId, tanggal: DateTime.now(), deskripsi: 'test');
@@ -53,7 +54,7 @@ void main() {
       final jeRepo = JenisRepositoryImpl(db);
       final akRepo = AkunRepositoryImpl(db);
       final paRepo = ParokiRepositoryImpl(db);
-      final juRepo = JurnalRepositoryImpl(db);
+      final juRepo = JurnalRepositoryImpl(db, tokenStorage: InMemoryTokenStorage());
 
       final kId = await keRepo.create(nama: 'K', alamat: 'A');
       final jId2 = await jeRepo.create(nama: 'PENDAPATAN');
@@ -64,7 +65,7 @@ void main() {
         keuskupanId: kId,
         tanggal: DateTime.now(),
         detils: [
-          DetilJurnalsCompanion.insert(id: 'tmp', jurnalId: 'tmp', akunId: aId, parokiId: pId, debit: const Value(50000)),
+          DetilJurnalsCompanion.insert(jurnalId: 'tmp', akunId: aId, parokiId: pId, debit: const Value(50000)),
         ],
       );
       final detils = await juRepo.getDetils(jId);

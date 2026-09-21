@@ -39,6 +39,19 @@ class JwtHelper {
     }
   }
 
+  static int? getParokiId(String token) {
+    try {
+      final payload = decodePayload(token);
+      final pid = payload['paroki_id'];
+      if (pid == null) return null;
+      if (pid is int) return pid;
+      if (pid is String) return int.tryParse(pid);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // helper buat test: bikin fake JWT (header.payload.signature) tanpa sign
   static String generateFakeJwt({required int expUnixSeconds, Map<String, dynamic>? extra}) {
     final header = base64Url.encode(utf8.encode(jsonEncode({"alg": "HS256", "typ": "JWT"}))).replaceAll('=', '');

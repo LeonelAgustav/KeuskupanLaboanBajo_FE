@@ -1,13 +1,16 @@
 import 'package:drift/drift.dart' hide Column;
-import 'package:fl_chart/fl_chart.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'core/auth/jwt_helper.dart';
 import 'core/auth/token_storage.dart';
+import 'core/config/api_config.dart';
 import 'core/network/connectivity_service.dart';
 import 'core/sync/sync_service.dart';
+import 'core/theme.dart';
 import 'data/local/app_database.dart';
+import 'features/dashboard/screens/dashboard_screen.dart';
+import 'features/auth/screens/login_screen.dart';
 import 'features/jurnal/screens/jurnal_list_screen.dart';
+import 'features/recap/widgets/recap_widgets.dart';
 import 'features/master/screens/master_screen.dart';
 import 'features/recap/screens/recap_keuskupan_screen.dart';
 
@@ -22,66 +25,93 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Keuskupan Labuan Bajo',
-      theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.deepPurple), useMaterial3: true),
-      home: const HomeTabs(),
+      theme: appTheme,
+      home: const AuthGate(),
     );
   }
 }
 
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  final TokenStorageI _tokens = TokenStorage();
+  late Future<bool> _hasSession = _check();
+  Future<bool> _check() async => await _tokens.hasValidAccessToken() || await _tokens.hasValidRefreshToken();
+  void _refresh() => setState(() { _hasSession = _check(); });
+  @override
+  Widget build(BuildContext context) => FutureBuilder<bool>(future: _hasSession, builder: (c, s) { if (!s.hasData) return const Scaffold(body: Center(child: CircularProgressIndicator())); return s.data! ? HomeTabs(onLogout: _refresh) : LoginScreen(tokens: _tokens, baseUrl: resolveApiUrl(), onSuccess: _refresh); });
+}
+
 class HomeTabs extends StatefulWidget {
-  const HomeTabs({super.key});
+  final VoidCallback? onLogout;
+  const HomeTabs({super.key, this.onLogout});
   @override
   State<HomeTabs> createState() => _HomeTabsState();
 }
 
-class _HomeTabsState extends State<HomeTabs> {
+class _HomeTabsState extends State<HomeTabs> with WidgetsBindingObserver {
   int _idx = 0;
   late final AppDatabase _db = AppDatabase();
   late final TokenStorageI _tokens = TokenStorage();
   late final ConnectivityService _conn = ConnectivityService();
-  // API_URL bisa di-override: flutter run --dart-define=API_URL=https://be.up.railway.app
-  String get _apiUrl {
-    const env = String.fromEnvironment('API_URL');
-    if (env.isNotEmpty) return env;
-    if (kIsWeb) return 'http://localhost:8080';
-    return 'http://10.39.48.26:8080'; // HP fisik di WiFi binus.local
-  }
-
   late final SyncService _sync = SyncService(
     db: _db,
     tokenStorage: _tokens,
     connectivity: _conn,
-    baseUrl: _apiUrl,
-    pushToServer: SyncService.defaultPush(_apiUrl),
+    baseUrl: resolveApiUrl(),
+    pushToServer: SyncService.defaultPush(resolveApiUrl()),
   );
   String _syncLog = '';
+  bool _initialSyncDone = false;
+  String _role = 'MEMBER';
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _sync.start();
-    _seedFakeTokenIfEmpty().then((_) {
-      // ponytail: langsung pull saat buka app jika online (biar data server masuk)
-      Future.delayed(const Duration(seconds: 1), () async {
-        if (await _conn.isOnline) {
-          final ok = await _sync.trySync();
-          if (ok && mounted) setState(() => _syncLog = 'Auto-pull OK');
-        }
-      });
-    });
+    _loadRole().then((_) => _doInitialSync());
   }
 
-  Future<void> _seedFakeTokenIfEmpty() async {
-    if (!await _tokens.hasValidAccessToken()) {
-      final exp = (DateTime.now().millisecondsSinceEpoch ~/ 1000) + 3600;
-      // pakai signed biar BE accept (secret sama dengan BE default)
-      final token = JwtHelper.generateSignedJwt(expUnixSeconds: exp);
-      await _tokens.saveTokens(accessToken: token, refreshToken: token);
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _sync.trySync();
+  }
+
+  Future<void> _loadRole() async {
+    try {
+      final t = await _tokens.getAccessToken();
+      String newRole = 'MEMBER';
+      if (t != null) {
+        final payload = JwtHelper.decodePayload(t);
+        final r = (payload['role'] as String?)?.toUpperCase();
+        if (r != null && r.isNotEmpty) newRole = r;
+      }
+      if (newRole != _role) {
+        if (mounted) setState(() => _role = newRole);
+        else _role = newRole;
+      }
+    } catch (_) {
+      if (_role != 'MEMBER' && mounted) setState(() => _role = 'MEMBER');
+    }
+  }
+
+  Future<void> _doInitialSync() async {
+    if (await _conn.isOnline) {
+      final ok = await _sync.trySync();
+      if (mounted) setState(() { _initialSyncDone = true; _syncLog = ok ? 'Auto-pull OK' : 'Auto-pull gagal (offline mode)'; });
+    } else {
+      if (mounted) setState(() { _initialSyncDone = true; _syncLog = 'Offline mode - data lokal'; });
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sync.stop();
     _db.close();
     super.dispose();
@@ -89,228 +119,69 @@ class _HomeTabsState extends State<HomeTabs> {
 
   @override
   Widget build(BuildContext context) {
-    // ponytail: 1 codebase, 4 tab sesuai plan, Responsive: web >600 pakai NavigationRail
-    final pages = [
-      _DashboardTab(db: _db, sync: _sync, log: _syncLog),
-      JurnalListScreen(db: _db),
-      RecapKeuskupanScreen(db: _db),
-      MasterScreen(db: _db),
-      _SettingsTab(db: _db, sync: _sync, tokens: _tokens, onLog: (s) => setState(() => _syncLog = s)),
+    final isMember = _role == 'MEMBER';
+    final pages = <Widget>[
+      DashboardScreen(db: _db, sync: _sync, log: _syncLog, role: _role, onNavigate: (i) => setState(() => _idx = i)),
+      JurnalListScreen(db: _db, tokenStorage: _tokens),
+      RecapKeuskupanScreen(db: _db, tokenStorage: _tokens),
+      if (!isMember) MasterScreen(db: _db, role: _role),
+      _ProfilTab(role: _role, onLogout: widget.onLogout),
     ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
+    if (_idx >= pages.length) _idx = pages.length - 1;
+    final railDests = <NavigationRailDestination>[
+      const NavigationRailDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: Text('Beranda')),
+      const NavigationRailDestination(icon: Icon(Icons.book_outlined), selectedIcon: Icon(Icons.book), label: Text('Jurnal')),
+      const NavigationRailDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: Text('Rekap')),
+      if (!isMember) const NavigationRailDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: Text('Kelola Data')),
+      const NavigationRailDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: Text('Profil')),
+    ];
+    final barDests = <NavigationDestination>[
+      const NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Beranda'),
+      const NavigationDestination(icon: Icon(Icons.book_outlined), selectedIcon: Icon(Icons.book), label: 'Jurnal'),
+      const NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: 'Rekap'),
+      if (!isMember) const NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Kelola Data'),
+      const NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profil'),
+    ];
+    return Stack(children: [
+      LayoutBuilder(builder: (context, constraints) {
         final isWide = constraints.maxWidth > 700;
         if (isWide) {
-          // Website layout: Rail di kiri, content centered max 900
-          return Scaffold(
-            body: Row(
-              children: [
-                NavigationRail(
-                  selectedIndex: _idx,
-                  onDestinationSelected: (i) => setState(() => _idx = i),
-                  labelType: NavigationRailLabelType.all,
-                  destinations: const [
-                    NavigationRailDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: Text('Dashboard')),
-                    NavigationRailDestination(icon: Icon(Icons.book_outlined), selectedIcon: Icon(Icons.book), label: Text('Jurnal')),
-                    NavigationRailDestination(icon: Icon(Icons.assessment_outlined), selectedIcon: Icon(Icons.assessment), label: Text('Rekap')),
-                    NavigationRailDestination(icon: Icon(Icons.category_outlined), selectedIcon: Icon(Icons.category), label: Text('Master')),
-                    NavigationRailDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: Text('Settings')),
-                  ],
-                ),
-                const VerticalDivider(width: 1),
-                Expanded(child: pages[_idx]),
-              ],
-            ),
-          );
+          return Scaffold(body: Row(children: [NavigationRail(selectedIndex: _idx, onDestinationSelected: (i) => setState(() => _idx = i), labelType: NavigationRailLabelType.all, destinations: railDests), const VerticalDivider(width: 1), Expanded(child: pages[_idx])]));
         }
-        // App layout: Bottom nav
-        return Scaffold(
-          body: pages[_idx],
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: _idx,
-            onDestinationSelected: (i) => setState(() => _idx = i),
-            destinations: const [
-              NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-              NavigationDestination(icon: Icon(Icons.book_outlined), selectedIcon: Icon(Icons.book), label: 'Jurnal'),
-              NavigationDestination(icon: Icon(Icons.assessment_outlined), selectedIcon: Icon(Icons.assessment), label: 'Rekap'),
-              NavigationDestination(icon: Icon(Icons.category_outlined), selectedIcon: Icon(Icons.category), label: 'Master'),
-              NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
-            ],
-          ),
-        );
-      },
-    );
+        return Scaffold(body: pages[_idx], bottomNavigationBar: NavigationBar(selectedIndex: _idx, onDestinationSelected: (i) => setState(() => _idx = i), destinations: barDests));
+      }),
+      if (!_initialSyncDone) Container(color: Colors.white, child: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Container(width: 96, height: 96, decoration: const BoxDecoration(shape: BoxShape.circle, color: ungu), child: const Icon(Icons.church, color: Colors.white, size: 48)), const SizedBox(height: 24), const Text('Keuskupan Labuan Bajo', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: darkText)), const SizedBox(height: 16), const CircularProgressIndicator(), const SizedBox(height: 12), Text(_syncLog.isEmpty ? 'Memuat data...' : _syncLog, style: const TextStyle(color: Colors.grey, fontSize: 13))]))),
+    ]);
   }
 }
 
-class _DashboardTab extends StatefulWidget {
-  final AppDatabase db;
-  final SyncService sync;
-  final String log;
-  const _DashboardTab({required this.db, required this.sync, required this.log});
-  @override
-  State<_DashboardTab> createState() => _DashboardTabState();
-}
-
-class _DashboardTabState extends State<_DashboardTab> {
-  int _refresh = 0;
-  Future<void> _doSync() async {
-    final hasAccess = await widget.sync.tokenStorage.hasValidAccessToken();
-    final online = await widget.sync.connectivity.isOnline;
-    final pending = await widget.db.queueCount();
-    debugPrint('Dashboard sync: online=$online hasAccess=$hasAccess pending=$pending');
-    final ok = await widget.sync.trySync();
-    final msg = ok ? 'Sync OK' : 'Sync gagal: online=$online access=$hasAccess pending=$pending -> cek BE http://10.39.48.26:8080';
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: ok ? Colors.green : Colors.red));
-    setState(() => _refresh++);
-  }
-
+class _ProfilTab extends StatelessWidget {
+  final String role;
+  final VoidCallback? onLogout;
+  const _ProfilTab({this.role = 'MEMBER', this.onLogout});
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Dashboard')),
+      appBar: AppBar(title: const Text('Profil')),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800),
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Card(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: ListView(padding: const EdgeInsets.all(16), children: [
+            Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Keuskupan Labuan Bajo', style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: 8),
-                    const Text('Sistem pembukuan offline-first untuk wilayah internet susah. Data tersimpan di SQLite lokal, sync otomatis saat online.'),
-                    if (widget.log.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(widget.log, style: const TextStyle(color: Colors.blue, fontSize: 12))),
-                  ]),
-                ),
-              ),
-              const SizedBox(height: 12),
-              FutureBuilder(
-                key: ValueKey(_refresh),
-                future: Future.wait([
-                  widget.db.customSelect('SELECT COUNT(*) as c FROM jurnals WHERE deleted_at IS NULL').getSingle(),
-                  widget.db.queueCount(),
-                ]),
-                builder: (c, snap) {
-                  final rows = snap.data as List?;
-                  final count = rows != null ? (rows[0] as QueryRow).data['c'] as int : 0;
-                  final pending = rows != null ? rows[1] as int : 0;
-                  return Card(
-                    child: ListTile(
-                      leading: Icon(pending == 0 ? Icons.cloud_done : Icons.cloud_upload, color: pending == 0 ? Colors.green : Colors.orange),
-                      title: Text('$count Jurnal tersimpan (lokal)'),
-                      subtitle: Text('Pending sync: $pending'),
-                      trailing: IconButton(icon: const Icon(Icons.sync), onPressed: _doSync),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              const _DashboardCharts(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DashboardCharts extends StatelessWidget {
-  const _DashboardCharts();
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: Future.wait([
-        // total debit/kredit dari detil_jurnals (YYYY-MM-DD TEXT)
-        Future(() async {
-          final db = AppDatabase();
-          final r = await db.customSelect('SELECT COALESCE(SUM(debit),0) as d, COALESCE(SUM(kredit),0) as k FROM detil_jurnals WHERE deleted_at IS NULL').getSingle();
-          await db.close();
-          return r;
-        }),
-      ]),
-      builder: (c, snap) {
-        if (!snap.hasData) return const SizedBox(height: 180, child: Center(child: CircularProgressIndicator()));
-        // ponytail: pakai fl_chart BarChart sederhana, data dari detil_jurnals
-        return Column(
-          children: [
-            _ChartCard(title: 'Ringkasan Keuangan', child: _BarChart()),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [const Icon(Icons.person, color: ungu), const SizedBox(width: 8), Text('Role saat ini: $role', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))]),
+                      const SizedBox(height: 8),
+                      Text(role == 'SUPERADMIN' ? 'SUPERADMIN: kelola Role + User + Master' : role == 'ADMIN' ? 'ADMIN: kelola User + Master (tanpa Role)' : 'MEMBER: hanya Jurnal/Rekap + Export', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                    ]))),
             const SizedBox(height: 12),
-            _ChartCard(title: 'Tren Bulanan', child: _LineChart()),
-          ],
-        );
-      },
-    );
-  }
-}
+            SizedBox(width: double.infinity, child: FilledButton.icon(icon: const Icon(Icons.logout), label: const Text('Keluar'), style: FilledButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), onPressed: () async { await TokenStorage().clear(); await Future.delayed(const Duration(milliseconds: 100)); if (onLogout != null) onLogout!(); else if (context.mounted) { Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const AuthGate()), (_) => false); } })),
 
-class _ChartCard extends StatelessWidget {
-  final String title;
-  final Widget child;
-  const _ChartCard({required this.title, required this.child});
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          SizedBox(height: 180, child: child),
-        ]),
-      ),
-    );
-  }
-}
-
-class _BarChart extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    // ponytail: fl_chart BarChart 2 bar: Debit vs Kredit, data real dari recap jika ada, fallback 0
-    return FutureBuilder(
-      future: AppDatabase().customSelect('SELECT COALESCE(SUM(debit),0) as d, COALESCE(SUM(kredit),0) as k FROM detil_jurnals WHERE deleted_at IS NULL').getSingle().then((r) => [r.data['d'] as num, r.data['k'] as num]),
-      builder: (c, snap) {
-        final d = snap.data != null ? (snap.data![0] as num).toDouble() : 0.0;
-        final k = snap.data != null ? (snap.data![1] as num).toDouble() : 0.0;
-        final maxY = (d > k ? d : k) * 1.2 + 1000;
-        return _BarChartView(debit: d, kredit: k, maxY: maxY == 0 ? 10000.0 : maxY);
-      },
-    );
-  }
-}
-
-class _BarChartView extends StatelessWidget {
-  final double debit, kredit, maxY;
-  const _BarChartView({required this.debit, required this.kredit, required this.maxY});
-  @override
-  Widget build(BuildContext context) {
-    return BarChart(
-      BarChartData(
-        maxY: maxY,
-        barGroups: [
-          BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: debit, color: Colors.blue, width: 32, borderRadius: BorderRadius.circular(4))]),
-          BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: kredit, color: Colors.green, width: 32, borderRadius: BorderRadius.circular(4))]),
-        ],
-        titlesData: FlTitlesData(
-          bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, _) => Text(v == 0 ? 'Debit' : 'Kredit', style: const TextStyle(fontSize: 11)))),
-          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 60, getTitlesWidget: (v, _) => Text('${(v / 1000).toStringAsFixed(0)}k', style: const TextStyle(fontSize: 9)))),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          ]),
         ),
-        gridData: const FlGridData(show: true),
-        borderData: FlBorderData(show: false),
       ),
     );
-  }
-}
-
-class _LineChart extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Text('Grafik tren bulanan akan muncul setelah ada data\n(6 bulan terakhir)', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)));
   }
 }
 
@@ -318,8 +189,7 @@ class _SettingsTab extends StatefulWidget {
   final AppDatabase db;
   final SyncService sync;
   final TokenStorageI tokens;
-  final ValueChanged<String> onLog;
-  const _SettingsTab({required this.db, required this.sync, required this.tokens, required this.onLog});
+  const _SettingsTab({required this.db, required this.sync, required this.tokens});
   @override
   State<_SettingsTab> createState() => _SettingsTabState();
 }
@@ -350,21 +220,14 @@ class _SettingsTabState extends State<_SettingsTab> {
             padding: const EdgeInsets.all(16),
             children: [
               ListTile(leading: const Icon(Icons.sync), title: const Text('Sync'), subtitle: Text(_status.isEmpty ? 'Otomatis saat online, retry 3x' : _status)),
-              const ListTile(leading: Icon(Icons.security), title: Text('Auth'), subtitle: Text('JWT access 15m, refresh 7d, cek offline')),
+              const ListTile(leading: Icon(Icons.security), title: Text('Auth'), subtitle: Text('JWT access 1 tahun, cek offline')),
               const ListTile(leading: Icon(Icons.storage), title: Text('Database'), subtitle: Text('drift SQLite (native) / IndexedDB+WASM (web)')),
               const Divider(),
               ElevatedButton.icon(icon: const Icon(Icons.sync), label: const Text('Sync Now'), onPressed: () async {
                 final ok = await widget.sync.trySync();
-                final msg = ok ? 'Sync berhasil' : 'Sync gagal: cek BE http://10.39.48.26:8080 + token';
-                widget.onLog(msg);
-                setState(() => _status = msg);
+                final msg = ok ? 'Sync berhasil' : 'Sync gagal: cek koneksi internet';
+                setState(() { _status = msg; });
                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: ok ? Colors.green : Colors.red));
-                _check();
-              }),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(icon: const Icon(Icons.bug_report), label: const Text('Cek BE'), onPressed: () async {
-                final ok = await widget.sync.connectivity.isOnline;
-                widget.onLog('isOnline=$ok');
                 _check();
               }),
             ],
@@ -374,3 +237,4 @@ class _SettingsTabState extends State<_SettingsTab> {
     );
   }
 }
+

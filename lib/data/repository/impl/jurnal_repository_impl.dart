@@ -2,15 +2,36 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import '../../local/app_database.dart';
+import '../../../core/auth/token_storage.dart';
 import '../interfaces/jurnal_repository.dart';
 
 class JurnalRepositoryImpl implements JurnalRepository {
   final AppDatabase db;
+  final TokenStorageI tokenStorage;
   final _uuid = const Uuid();
-  JurnalRepositoryImpl(this.db);
+  JurnalRepositoryImpl(this.db, {required this.tokenStorage});
+
+  Future<int?> _getParokiId() async => await tokenStorage.getCurrentParokiId();
+
+  Future<int?> _getUserId() async => await tokenStorage.getCurrentUserId();
 
   @override
-  Future<List<Jurnal>> getAll() => (db.select(db.jurnals)..where((t) => t.deletedAt.isNull())..orderBy([(t) => OrderingTerm.desc(t.tanggal)])).get();
+  Future<List<Jurnal>> getAll() async {
+    final parokiId = await _getParokiId();
+    // MEMBER hanya bisa lihat jurnal milik paroki mereka
+    if (parokiId != null && parokiId > 0) {
+      final jurnalIds = (await (db.select(db.detilJurnals)
+        ..where((t) => t.parokiId.equals(parokiId) & t.deletedAt.isNull()))
+        .get()).map((d) => d.jurnalId).toSet().toList();
+      if (jurnalIds.isEmpty) return [];
+      return (db.select(db.jurnals)
+        ..where((t) => t.deletedAt.isNull() & t.id.isIn(jurnalIds))
+        ..orderBy([(t) => OrderingTerm.desc(t.tanggal)])).get();
+    }
+    return (db.select(db.jurnals)
+      ..where((t) => t.deletedAt.isNull())
+      ..orderBy([(t) => OrderingTerm.desc(t.tanggal)])).get();
+  }
 
   @override
   Future<Jurnal?> getById(String id) => (db.select(db.jurnals)..where((t) => t.id.equals(id))).getSingleOrNull();
@@ -21,12 +42,13 @@ class JurnalRepositoryImpl implements JurnalRepository {
 
   @override
   Future<String> create({
-    required String keuskupanId,
+    required int keuskupanId,
     required DateTime tanggal,
     String? deskripsi,
     String? noBukti,
     List<DetilJurnalsCompanion> detils = const [],
   }) async {
+    final userId = await _getUserId();
     final id = _uuid.v4();
     await db.transaction(() async {
       await db.into(db.jurnals).insert(JurnalsCompanion.insert(
@@ -35,13 +57,12 @@ class JurnalRepositoryImpl implements JurnalRepository {
         tanggal: tanggal,
         deskripsi: Value(deskripsi),
         noBukti: Value(noBukti),
+        createdBy: Value(userId),
       ));
-      await db.enqueue('jurnals', id, 'insert', jsonEncode({"id": id, "keuskupan_id": keuskupanId, "tanggal": tanggal.toIso8601String(), "deskripsi": deskripsi, "no_bukti": noBukti}));
+      await db.enqueue('jurnals', id, 'insert', jsonEncode({"id": id, "keuskupan_id": keuskupanId, "tanggal": tanggal.toIso8601String(), "deskripsi": deskripsi, "no_bukti": noBukti, "created_by": userId}));
       for (final d in detils) {
-        final rawId = d.id.present ? d.id.value : '';
-        final detilId = (rawId.isEmpty || rawId == 'tmp') ? _uuid.v4() : rawId;
-        final comp = d.copyWith(id: Value(detilId), jurnalId: Value(id));
-        await db.into(db.detilJurnals).insert(comp);
+        final comp = d.copyWith(jurnalId: Value(id));
+        final detilId = (await db.into(db.detilJurnals).insertReturning(comp)).id;
         final detilPayload = jsonEncode({
           "id": detilId,
           "jurnal_id": id,
@@ -50,37 +71,70 @@ class JurnalRepositoryImpl implements JurnalRepository {
           "debit": comp.debit.present ? comp.debit.value : 0,
           "kredit": comp.kredit.present ? comp.kredit.value : 0,
           "keterangan": comp.keterangan.present ? comp.keterangan.value : null,
+          "created_by": userId,
         });
-        await db.enqueue('detil_jurnals', detilId, 'insert', detilPayload);
+        await db.enqueue('detil_jurnals', detilId.toString(), 'insert', detilPayload);
       }
     });
     return id;
   }
 
   @override
-  Future<void> update(String id, {String? keuskupanId, DateTime? tanggal, String? deskripsi, String? noBukti}) async {
+  Future<void> update(String id, {int? keuskupanId, DateTime? tanggal, String? deskripsi, String? noBukti, List<DetilJurnalsCompanion>? detils}) async {
+    final userId = await _getUserId();
+    // Update header
     final comp = JurnalsCompanion(
       keuskupanId: keuskupanId != null ? Value(keuskupanId) : const Value.absent(),
       tanggal: tanggal != null ? Value(tanggal) : const Value.absent(),
       deskripsi: deskripsi != null ? Value(deskripsi) : const Value.absent(),
       noBukti: noBukti != null ? Value(noBukti) : const Value.absent(),
       updatedAt: Value(DateTime.now()),
+      updatedBy: Value(userId),
       isSynced: const Value(false),
     );
     await (db.update(db.jurnals)..where((t) => t.id.equals(id))).write(comp);
-    await db.enqueue('jurnals', id, 'update', '{"id":"$id"}');
+    await db.enqueue('jurnals', id, 'update', jsonEncode({"id": id, "updated_by": userId}));
+
+    // Update detils if provided
+    if (detils != null) {
+      // Soft delete existing detils
+      await (db.update(db.detilJurnals)..where((t) => t.jurnalId.equals(id))).write(DetilJurnalsCompanion(
+        deletedAt: Value(DateTime.now()),
+        deletedBy: Value(userId),
+        isSynced: const Value(false),
+      ));
+      // Insert new detils
+      for (final d in detils) {
+        final comp = d.copyWith(jurnalId: Value(id));
+        final detilId = (await db.into(db.detilJurnals).insertReturning(comp)).id;
+        final detilPayload = jsonEncode({
+          "id": detilId,
+          "jurnal_id": id,
+          "akun_id": comp.akunId.value,
+          "paroki_id": comp.parokiId.value,
+          "debit": comp.debit.present ? comp.debit.value : 0,
+          "kredit": comp.kredit.present ? comp.kredit.value : 0,
+          "keterangan": comp.keterangan.present ? comp.keterangan.value : null,
+          "created_by": userId,
+        });
+        await db.enqueue('detil_jurnals', detilId.toString(), 'insert', detilPayload);
+      }
+    }
   }
 
   @override
   Future<void> delete(String id) async {
+    final userId = await _getUserId();
     await (db.update(db.jurnals)..where((t) => t.id.equals(id))).write(JurnalsCompanion(
       deletedAt: Value(DateTime.now()),
+      deletedBy: Value(userId),
       isSynced: const Value(false),
     ));
-    await db.enqueue('jurnals', id, 'delete', '{"id":"$id"}');
+    await db.enqueue('jurnals', id, 'delete', jsonEncode({"id": id, "deleted_by": userId}));
     // soft delete detils juga
     await (db.update(db.detilJurnals)..where((t) => t.jurnalId.equals(id))).write(DetilJurnalsCompanion(
       deletedAt: Value(DateTime.now()),
+      deletedBy: Value(userId),
     ));
   }
 

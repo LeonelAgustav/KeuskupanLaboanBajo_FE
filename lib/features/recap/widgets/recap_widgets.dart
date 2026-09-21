@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme.dart';
 import '../../../data/models/recap_models.dart';
 
 // ─── Currency Formatter ─────────────────────────────────────────────────────
@@ -20,21 +21,35 @@ const monthNamesId = [
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
 ];
 
+const weekdayNamesId = [
+  'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu',
+];
+
 // ─── MonthYearPicker ────────────────────────────────────────────────────────
 
+enum PeriodMode { month, year }
+
 class MonthYearPicker extends StatelessWidget {
-  final DateTime selectedMonth;
-  final ValueChanged<int> onChangeMonth;
+  final DateTime selectedDate;
+  final ValueChanged<DateTime> onDateChanged;
+  final PeriodMode mode;
+  final ValueChanged<PeriodMode>? onModeChanged;
 
   const MonthYearPicker({
     super.key,
-    required this.selectedMonth,
-    required this.onChangeMonth,
+    required this.selectedDate,
+    required this.onDateChanged,
+    this.mode = PeriodMode.month,
+    this.onModeChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    final label = '${monthNamesId[selectedMonth.month - 1]} ${selectedMonth.year}';
+    final isYearMode = mode == PeriodMode.year;
+    final label = isYearMode
+        ? '${selectedDate.year}'
+        : '${monthNamesId[selectedDate.month - 1]} ${selectedDate.year}';
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
@@ -42,12 +57,32 @@ class MonthYearPicker extends StatelessWidget {
         children: [
           IconButton(
             icon: const Icon(Icons.chevron_left),
-            onPressed: () => onChangeMonth(-1),
+            onPressed: () => onDateChanged(
+              isYearMode
+                  ? DateTime(selectedDate.year - 1, selectedDate.month, selectedDate.day)
+                  : DateTime(selectedDate.year, selectedDate.month - 1, selectedDate.day),
+            ),
           ),
-          Text(label, style: Theme.of(context).textTheme.titleMedium),
+          if (onModeChanged != null) ...[
+            const SizedBox(width: 4),
+            Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: SegmentedButton<PeriodMode>(
+              segments: const [
+                ButtonSegment(value: PeriodMode.month, label: Text('Bulanan')),
+                ButtonSegment(value: PeriodMode.year, label: Text('Tahunan')),
+              ],
+              selected: {mode},
+              onSelectionChanged: (s) => onModeChanged!(s.first),
+            ))),
+            const SizedBox(width: 4),
+          ],
+          Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: Text(label, style: Theme.of(context).textTheme.titleMedium, overflow: TextOverflow.ellipsis))),
           IconButton(
             icon: const Icon(Icons.chevron_right),
-            onPressed: () => onChangeMonth(1),
+            onPressed: () => onDateChanged(
+              isYearMode
+                  ? DateTime(selectedDate.year + 1, selectedDate.month, selectedDate.day)
+                  : DateTime(selectedDate.year, selectedDate.month + 1, selectedDate.day),
+            ),
           ),
         ],
       ),
@@ -105,6 +140,7 @@ class SummaryCard extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
                     color: color,
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
               ),
@@ -119,13 +155,13 @@ class SummaryCard extends StatelessWidget {
 // ─── SummaryRow (3 cards) ───────────────────────────────────────────────────
 
 class SummaryRow extends StatelessWidget {
-  final double totalDebit;
-  final double totalKredit;
+  final double totalPendapatan;
+  final double totalPengeluaran;
 
   const SummaryRow({
     super.key,
-    required this.totalDebit,
-    required this.totalKredit,
+    required this.totalPendapatan,
+    required this.totalPengeluaran,
   });
 
   @override
@@ -135,23 +171,23 @@ class SummaryRow extends StatelessWidget {
       child: Row(
         children: [
           SummaryCard(
-            title: 'Total Debit',
-            amount: totalDebit,
-            color: Colors.blue.shade700,
+            title: 'Total Pendapatan',
+            amount: totalPendapatan,
+            color: hijauPendapatan,
             icon: Icons.arrow_upward,
           ),
           const SizedBox(width: 4),
           SummaryCard(
-            title: 'Total Kredit',
-            amount: totalKredit,
-            color: Colors.green.shade700,
+            title: 'Total Pengeluaran',
+            amount: totalPengeluaran,
+            color: merahPengeluaran,
             icon: Icons.arrow_downward,
           ),
           const SizedBox(width: 4),
           SummaryCard(
-            title: 'Saldo',
-            amount: totalDebit - totalKredit,
-            color: Colors.orange.shade700,
+            title: 'Saldo Kas',
+            amount: totalPendapatan - totalPengeluaran,
+            color: emasTeks,
             icon: Icons.account_balance_wallet,
           ),
         ],
@@ -187,7 +223,7 @@ class ParokiRecapCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.church, color: Colors.deepPurple.shade300, size: 20),
+                  Icon(Icons.church, color: ungu.withOpacity(0.6), size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -203,16 +239,16 @@ class ParokiRecapCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _AmountLabel(
-                      label: 'Debit',
-                      amount: summary.totalDebit,
-                      color: Colors.blue.shade700,
+                      label: 'Pendapatan',
+                      amount: summary.totalPendapatan,
+                      color: hijauPendapatan,
                     ),
                   ),
                   Expanded(
                     child: _AmountLabel(
-                      label: 'Kredit',
-                      amount: summary.totalKredit,
-                      color: Colors.green.shade700,
+                      label: 'Pengeluaran',
+                      amount: summary.totalPengeluaran,
+                      color: merahPengeluaran,
                     ),
                   ),
                 ],
@@ -243,9 +279,13 @@ class _AmountLabel extends StatelessWidget {
       children: [
         Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 11)),
         const SizedBox(height: 2),
-        Text(
-          formatRupiah(amount),
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: color),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            formatRupiah(amount),
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: color),
+          ),
         ),
       ],
     );
@@ -283,17 +323,69 @@ class AkunDetailTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  formatRupiah(detail.totalDebit),
-                  style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
+                  formatRupiah(detail.totalPendapatan),
+                  style: TextStyle(fontSize: 12, color: hijauPendapatan),
                 ),
                 Text(
-                  formatRupiah(detail.totalKredit),
-                  style: TextStyle(fontSize: 12, color: Colors.green.shade700),
+                  formatRupiah(detail.totalPengeluaran),
+                  style: TextStyle(fontSize: 12, color: merahPengeluaran),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Monthly recap per bulan untuk mode tahunan
+class MonthlyRecapTable extends StatelessWidget {
+  final List<MonthlyRecap> monthlyData;
+  final double totalPendapatan;
+  final double totalPengeluaran;
+  const MonthlyRecapTable({super.key, required this.monthlyData, required this.totalPendapatan, required this.totalPengeluaran});
+  @override
+  Widget build(BuildContext context) {
+    if (monthlyData.isEmpty) return Card(child: Padding(padding: const EdgeInsets.all(32), child: Center(child: Text('Tidak ada data tahun ini', style: TextStyle(color: Colors.grey[500])))));
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 360),
+          child: Column(children: [
+            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: ungu.withOpacity(0.08), borderRadius: const BorderRadius.vertical(top: Radius.circular(12))), child: Row(children: const [SizedBox(width: 80, child: Text('Bulan', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12))), SizedBox(width: 90, child: Text('Pendapatan', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12), textAlign: TextAlign.right)), SizedBox(width: 90, child: Text('Pengeluaran', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12), textAlign: TextAlign.right)), SizedBox(width: 90, child: Text('Saldo', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12), textAlign: TextAlign.right)) ])),
+            ...monthlyData.map((m) => Container(padding: const EdgeInsets.symmetric(horizontal:12, vertical:8), decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFE0E0E0)))), child: Row(children: [SizedBox(width: 80, child: Text(m.namaBulan, style: const TextStyle(fontSize:12, fontWeight: FontWeight.w500))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(m.totalPendapatan), style: TextStyle(fontSize:12, color:hijauPendapatan), textAlign: TextAlign.right))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(m.totalPengeluaran), style: TextStyle(fontSize:12, color:merahPengeluaran), textAlign: TextAlign.right))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(m.saldo), style: TextStyle(fontSize:12, color: m.saldo>=0?hijauPendapatan:merahPengeluaran, fontWeight: FontWeight.w600), textAlign: TextAlign.right))) ]))),
+            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: ungu.withOpacity(0.08), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12))), child: Row(children: [const SizedBox(width: 80, child: Text('TOTAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(totalPendapatan), style: TextStyle(fontWeight: FontWeight.bold, fontSize:12, color:hijauPendapatan), textAlign: TextAlign.right))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(totalPengeluaran), style: TextStyle(fontWeight: FontWeight.bold, fontSize:12, color:merahPengeluaran), textAlign: TextAlign.right))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(totalPendapatan-totalPengeluaran), style: TextStyle(fontWeight: FontWeight.bold, fontSize:12, color:emasTeks), textAlign: TextAlign.right))) ])),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// Weekly recap table for monthly mode (W1-5)
+class WeeklyRecapTable extends StatelessWidget {
+  final List<WeeklyRecap> weeklyData;
+  final double totalPendapatan;
+  final double totalPengeluaran;
+  const WeeklyRecapTable({super.key, required this.weeklyData, required this.totalPendapatan, required this.totalPengeluaran});
+  @override
+  Widget build(BuildContext context) {
+    if (weeklyData.isEmpty) return Card(child: Padding(padding: const EdgeInsets.all(32), child: Center(child: Text('Tidak ada data minggu ini', style: TextStyle(color: Colors.grey[500])))));
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 360),
+          child: Column(children: [
+            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: ungu.withOpacity(0.08), borderRadius: const BorderRadius.vertical(top: Radius.circular(12))), child: Row(children: const [SizedBox(width: 80, child: Text('Minggu', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12))), SizedBox(width: 90, child: Text('Pendapatan', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12), textAlign: TextAlign.right)), SizedBox(width: 90, child: Text('Pengeluaran', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12), textAlign: TextAlign.right)), SizedBox(width: 90, child: Text('Saldo', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12), textAlign: TextAlign.right)) ])),
+            ...weeklyData.map((w) => Container(padding: const EdgeInsets.symmetric(horizontal:12, vertical:8), decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFE0E0E0)))), child: Row(children: [SizedBox(width: 80, child: Text('${w.namaMinggu} (${w.rentang})', style: const TextStyle(fontSize:12, fontWeight: FontWeight.w500))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(w.totalPendapatan), style: TextStyle(fontSize:12, color:hijauPendapatan), textAlign: TextAlign.right))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(w.totalPengeluaran), style: TextStyle(fontSize:12, color:merahPengeluaran), textAlign: TextAlign.right))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(w.saldo), style: TextStyle(fontSize:12, color: w.saldo>=0?hijauPendapatan:merahPengeluaran, fontWeight: FontWeight.w600), textAlign: TextAlign.right))) ]))),
+            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: ungu.withOpacity(0.08), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12))), child: Row(children: [const SizedBox(width: 80, child: Text('TOTAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(totalPendapatan), style: TextStyle(fontWeight: FontWeight.bold, fontSize:12, color:hijauPendapatan), textAlign: TextAlign.right))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(totalPengeluaran), style: TextStyle(fontWeight: FontWeight.bold, fontSize:12, color:merahPengeluaran), textAlign: TextAlign.right))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(totalPendapatan-totalPengeluaran), style: TextStyle(fontWeight: FontWeight.bold, fontSize:12, color:emasTeks), textAlign: TextAlign.right))) ])),
+          ]),
+        ),
       ),
     );
   }

@@ -10,8 +10,7 @@ void main() {
     test('enqueue 3 op offline -> pending 3', () async {
       final db = AppDatabase(NativeDatabase.memory());
       final uuid = const Uuid();
-      final kId = uuid.v4();
-      await db.into(db.keuskupans).insert(KeuskupansCompanion.insert(id: kId, nama: 'K', alamat: 'A'));
+final kId = (await db.into(db.keuskupans).insertReturning(KeuskupansCompanion.insert(nama: 'K', alamat: 'A'))).id;
 
       for (var i = 0; i < 3; i++) {
         final jId = uuid.v4();
@@ -28,8 +27,7 @@ void main() {
     test('retryCount naik tiap gagal sync', () async {
       final db = AppDatabase(NativeDatabase.memory());
       final uuid = const Uuid();
-      final kId = uuid.v4();
-      await db.into(db.keuskupans).insert(KeuskupansCompanion.insert(id: kId, nama: 'K', alamat: 'A'));
+final kId = (await db.into(db.keuskupans).insertReturning(KeuskupansCompanion.insert(nama: 'K', alamat: 'A'))).id;
       final jId = uuid.v4();
       await db.insertJurnalLocal(id: jId, keuskupanId: kId, tanggal: DateTime.now());
 
@@ -51,8 +49,7 @@ void main() {
     test('sync sukses -> queue hilang, is_synced jadi 1', () async {
       final db = AppDatabase(NativeDatabase.memory());
       final uuid = const Uuid();
-      final kId = uuid.v4();
-      await db.into(db.keuskupans).insert(KeuskupansCompanion.insert(id: kId, nama: 'K', alamat: 'A'));
+final kId = (await db.into(db.keuskupans).insertReturning(KeuskupansCompanion.insert(nama: 'K', alamat: 'A'))).id;
       final jId = uuid.v4();
       await db.insertJurnalLocal(id: jId, keuskupanId: kId, tanggal: DateTime.now());
 
@@ -73,8 +70,7 @@ void main() {
     test('offline tulis banyak, online flush semua', () async {
       final db = AppDatabase(NativeDatabase.memory());
       final uuid = const Uuid();
-      final kId = uuid.v4();
-      await db.into(db.keuskupans).insert(KeuskupansCompanion.insert(id: kId, nama: 'K', alamat: 'A'));
+final kId = (await db.into(db.keuskupans).insertReturning(KeuskupansCompanion.insert(nama: 'K', alamat: 'A'))).id;
 
       // offline: 5 jurnal
       for (var i = 0; i < 5; i++) {

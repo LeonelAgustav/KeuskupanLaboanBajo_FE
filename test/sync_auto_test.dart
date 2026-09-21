@@ -32,8 +32,7 @@ void main() {
     test('auto-sync: offline enqueue, online flush', () async {
       final db = AppDatabase(NativeDatabase.memory());
       final uuid = const Uuid();
-      final kId = uuid.v4();
-      await db.into(db.keuskupans).insert(KeuskupansCompanion.insert(id: kId, nama: 'K', alamat: 'A'));
+final kId = (await db.into(db.keuskupans).insertReturning(KeuskupansCompanion.insert(nama: 'K', alamat: 'A'))).id;
 
       final storage = InMemoryTokenStorage();
       final exp = (DateTime.now().millisecondsSinceEpoch ~/ 1000) + 3600;
@@ -76,8 +75,7 @@ void main() {
     test('auto-sync gagal 3x -> stop retry', () async {
       final db = AppDatabase(NativeDatabase.memory());
       final uuid = const Uuid();
-      final kId = uuid.v4();
-      await db.into(db.keuskupans).insert(KeuskupansCompanion.insert(id: kId, nama: 'K', alamat: 'A'));
+final kId = (await db.into(db.keuskupans).insertReturning(KeuskupansCompanion.insert(nama: 'K', alamat: 'A'))).id;
       await db.insertJurnalLocal(id: uuid.v4(), keuskupanId: kId, tanggal: DateTime.now());
 
       final storage = InMemoryTokenStorage();
@@ -110,8 +108,7 @@ void main() {
     test('start() listen onOnline -> auto flush saat online', () async {
       final db = AppDatabase(NativeDatabase.memory());
       final uuid = const Uuid();
-      final kId = uuid.v4();
-      await db.into(db.keuskupans).insert(KeuskupansCompanion.insert(id: kId, nama: 'K', alamat: 'A'));
+final kId = (await db.into(db.keuskupans).insertReturning(KeuskupansCompanion.insert(nama: 'K', alamat: 'A'))).id;
       await db.insertJurnalLocal(id: uuid.v4(), keuskupanId: kId, tanggal: DateTime.now());
 
       final storage = InMemoryTokenStorage();

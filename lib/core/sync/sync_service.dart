@@ -18,6 +18,7 @@ class SyncService {
   final String baseUrl;
   final Duration debounce;
   StreamSubscription<bool>? _sub;
+  Timer? _timer;
   bool _syncing = false;
 
   SyncService({
@@ -61,9 +62,16 @@ class SyncService {
         await trySync();
       }
     });
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(minutes: 5), (_) async {
+      if (await connectivity.isOnline) await trySync();
+    });
   }
 
-  Future<void> stop() async => await _sub?.cancel();
+  Future<void> stop() async {
+    await _sub?.cancel();
+    _timer?.cancel();
+  }
 
   Future<DateTime> _getLastPull() async {
     final prefs = await SharedPreferences.getInstance();
@@ -87,7 +95,7 @@ class SyncService {
       // master dulu biar FK jurnal tidak fail
       for (final k in (body['keuskupans'] as List? ?? [])) {
         final m = k as Map<String, dynamic>;
-        final id = m['ID'] as String? ?? m['id'] as String?;
+        final id = (m['ID'] ?? m['id']);
         if (id == null) continue;
         await db.customStatement(
             'INSERT OR REPLACE INTO keuskupans (id, nama, alamat, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, 1)',
@@ -95,33 +103,58 @@ class SyncService {
       }
       for (final p in (body['parokis'] as List? ?? [])) {
         final m = p as Map<String, dynamic>;
-        final id = m['ID'] as String? ?? m['id'] as String?;
+        final id = (m['ID'] ?? m['id']);
         if (id == null) continue;
         await db.customStatement(
             'INSERT OR REPLACE INTO parokis (id, nama, alamat, keuskupan_id, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, ?, 1)',
-            [id, m['Nama'] ?? m['nama'] ?? '', m['Alamat'] ?? m['alamat'] ?? '', m['KeuskupanID'] ?? m['keuskupan_id'] ?? '', DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
+            [id, m['Nama'] ?? m['nama'] ?? '', m['Alamat'] ?? m['alamat'] ?? '', m['KeuskupanID'] ?? m['keuskupan_id'] ?? 0, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
       }
       for (final jn in (body['jenis'] as List? ?? [])) {
         final m = jn as Map<String, dynamic>;
-        final id = m['ID'] as String? ?? m['id'] as String?;
+        final id = (m['ID'] ?? m['id']);
         if (id == null) continue;
         await db.customStatement('INSERT OR REPLACE INTO jenis (id, nama, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, 1)',
             [id, m['Nama'] ?? m['nama'] ?? '', DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
       }
       for (final a in (body['akuns'] as List? ?? [])) {
         final m = a as Map<String, dynamic>;
-        final id = m['ID'] as String? ?? m['id'] as String?;
+        final id = (m['ID'] ?? m['id']);
         if (id == null) continue;
         await db.customStatement(
             'INSERT OR REPLACE INTO akuns (id, kode, nama, jenis_id, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, ?, 1)',
-            [id, m['Kode'] ?? m['kode'] ?? '', m['Nama'] ?? m['nama'] ?? '', m['JenisID'] ?? m['jenis_id'] ?? '', DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
+            [id, m['Kode'] ?? m['kode'] ?? '', m['Nama'] ?? m['nama'] ?? '', m['JenisID'] ?? m['jenis_id'] ?? 0, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
       }
+      for (final r in (body['roles'] as List? ?? [])) {
+        final m = r as Map<String, dynamic>;
+        final id = (m['ID'] ?? m['id']);
+        if (id == null) continue;
+        await db.customStatement(
+            'INSERT OR REPLACE INTO roles (id, nama, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, 1)',
+            [id, m['Nama'] ?? m['nama'] ?? '', DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
+      }
+      for (final u in (body['users'] as List? ?? [])) {
+        final m = u as Map<String, dynamic>;
+        final id = (m['ID'] ?? m['id']);
+        if (id == null) continue;
+        await db.customStatement(
+            'INSERT OR REPLACE INTO users (id, nama, email, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, 1)',
+            [id.toString(), m['Nama'] ?? m['nama'] ?? '', m['Email'] ?? m['email'] ?? '', DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
+      }
+      // ADMIN tidak boleh lihat SUPERADMIN bahkan di cache lokal lama
+      try {
+        if (token.isNotEmpty) {
+          final payload = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(token.split('.')[1])))) as Map<String, dynamic>;
+          if ((payload['role'] as String?)?.toUpperCase() == 'ADMIN') {
+            await db.customStatement("DELETE FROM users WHERE email = 'superadmin@keuskupan.test'");
+          }
+        }
+      } catch (_) {}
       final jurnals = body['jurnals'] as List? ?? [];
       for (final j in jurnals) {
         final m = j as Map<String, dynamic>;
         final id = m['ID'] as String? ?? m['id'] as String?;
         if (id == null) continue;
-        final keuskupanId = m['KeuskupanID'] as String? ?? m['keuskupan_id'] as String? ?? '';
+        final keuskupanId = m['KeuskupanID'] ?? m['keuskupan_id'] ?? 0;
         final tanggalStr = m['Tanggal'] as String? ?? m['tanggal'] as String?;
         DateTime tanggal = DateTime.now();
         if (tanggalStr != null) tanggal = DateTime.tryParse(tanggalStr) ?? DateTime.now();
@@ -131,12 +164,20 @@ class SyncService {
         final detils = m['DetilJurnal'] as List? ?? m['detil_jurnal'] as List? ?? [];
         for (final d in detils) {
           final dm = d as Map<String, dynamic>;
-          final did = dm['ID'] as String? ?? dm['id'] as String?;
+          final did = (dm['ID'] ?? dm['id']);
           if (did == null) continue;
           await db.customStatement(
               'INSERT OR REPLACE INTO detil_jurnals (id, jurnal_id, akun_id, paroki_id, debit, kredit, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)',
-              [did, id, dm['AkunID'] ?? dm['akun_id'] ?? '', dm['ParokiID'] ?? dm['paroki_id'] ?? '', dm['Debit'] ?? 0, dm['Kredit'] ?? 0, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
+              [did, id, dm['AkunID'] ?? dm['akun_id'] ?? 0, dm['ParokiID'] ?? dm['paroki_id'] ?? 0, dm['Debit'] ?? 0, dm['Kredit'] ?? 0, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
         }
+      }
+      // hapus lokal yang sudah di-soft-delete di BE
+      for (final d in (body['deleted'] as List? ?? [])) {
+        final m = d as Map<String, dynamic>;
+        final id = m['ID'] as String? ?? m['id'] as String?;
+        if (id == null) continue;
+        await db.customStatement('UPDATE jurnals SET deleted_at = ?, is_synced = 1 WHERE id = ?', [DateTime.now().millisecondsSinceEpoch, id]);
+        await db.customStatement('UPDATE detil_jurnals SET deleted_at = ? WHERE jurnal_id = ?', [DateTime.now().millisecondsSinceEpoch, id]);
       }
       await _setLastPull(DateTime.now());
       return true;
@@ -158,7 +199,13 @@ class SyncService {
       final pending = await db.getPendingSync();
       final toPush = pending.where((e) => e.retryCount < 3).toList();
       if (toPush.isNotEmpty) {
-        final ok = await pushToServer(toPush, token);
+        // ponytail: jaringan/BE down = gagal manis (retry nanti), jangan biarkan exception keluar
+        bool ok;
+        try {
+          ok = await pushToServer(toPush, token);
+        } catch (_) {
+          ok = false;
+        }
         if (!ok) {
           for (final q in toPush) {
             await db.customStatement('UPDATE sync_queues SET retry_count = retry_count + 1 WHERE id=?', [q.id]);

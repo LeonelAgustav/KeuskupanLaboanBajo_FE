@@ -2,32 +2,32 @@ import '../../local/app_database.dart';
 
 abstract class ParokiRepository {
   Future<List<Paroki>> getAll();
-  Future<Paroki?> getById(String id);
-  Future<String> create({required String nama, required String alamat, required String keuskupanId});
-  Future<void> update(String id, {String? nama, String? alamat, String? keuskupanId});
-  Future<void> delete(String id);
+  Future<Paroki?> getById(int id);
+  Future<int> create({required String nama, required String alamat, required int keuskupanId});
+  Future<void> update(int id, {String? nama, String? alamat, int? keuskupanId});
+  Future<void> delete(int id);
 }
 
 abstract class KeuskupanRepository {
   Future<List<Keuskupan>> getAll();
-  Future<Keuskupan?> getById(String id);
-  Future<String> create({required String nama, required String alamat});
-  Future<void> update(String id, {String? nama, String? alamat});
-  Future<void> delete(String id);
+  Future<Keuskupan?> getById(int id);
+  Future<int> create({required String nama, required String alamat});
+  Future<void> update(int id, {String? nama, String? alamat});
+  Future<void> delete(int id);
 }
 
 abstract class AkunRepository {
   Future<List<Akun>> getAll();
-  Future<Akun?> getById(String id);
-  Future<String> create({required String kode, required String nama, required String jenisId});
-  Future<void> update(String id, {String? kode, String? nama, String? jenisId});
-  Future<void> delete(String id);
+  Future<Akun?> getById(int id);
+  Future<int> create({required String kode, required String nama, required int jenisId});
+  Future<void> update(int id, {String? kode, String? nama, int? jenisId});
+  Future<void> delete(int id);
 }
 
 abstract class JenisRepository {
   Future<List<Jeni>> getAll();
-  Future<Jeni?> getById(String id);
-  Future<String> create({required String nama});
-  Future<void> update(String id, {String? nama});
-  Future<void> delete(String id);
+  Future<Jeni?> getById(int id);
+  Future<int> create({required String nama});
+  Future<void> update(int id, {String? nama});
+  Future<void> delete(int id);
 }
