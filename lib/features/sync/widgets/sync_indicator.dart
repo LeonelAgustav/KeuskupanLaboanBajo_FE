@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme.dart';
 
 class SyncIndicator extends StatelessWidget {
   final int pending;
@@ -8,18 +9,25 @@ class SyncIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isSynced = pending == 0;
+    final isSynced = pending == 0 && conflicts == 0;
     final hasConflict = conflicts > 0;
+    final color = hasConflict ? dangerRed : isSynced ? successGreen : warningOrange;
+    final icon = hasConflict ? Icons.cloud_off : isSynced ? Icons.cloud_done : Icons.cloud_upload;
+    final label = hasConflict ? 'Konflik' : isSynced ? 'Synced' : 'Pending';
+
     return InkWell(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Row(children: [
-          Icon(isSynced ? Icons.cloud_done : hasConflict ? Icons.cloud_off : Icons.cloud_upload, color: isSynced ? Colors.green : hasConflict ? Colors.red : Colors.orange, size: 20),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, color: color, size: 18),
           const SizedBox(width: 4),
-          Text('$pending', style: TextStyle(color: isSynced ? Colors.green : hasConflict ? Colors.red : Colors.orange, fontWeight: FontWeight.bold)),
-          if (!isSynced) const Padding(padding: EdgeInsets.only(left: 4), child: SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))),
-          if (hasConflict) Padding(padding: const EdgeInsets.only(left: 4), child: Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.red))),
+          Text('$pending', style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w500, fontSize: 10)),
+          if (hasConflict) Container(margin: const EdgeInsets.only(left: 4), width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.red)),
         ]),
       ),
     );

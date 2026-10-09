@@ -339,54 +339,98 @@ class AkunDetailTile extends StatelessWidget {
   }
 }
 
-/// Monthly recap per bulan untuk mode tahunan
+/// Monthly recap per bulan untuk mode tahunan (Model Card Responsive)
 class MonthlyRecapTable extends StatelessWidget {
   final List<MonthlyRecap> monthlyData;
   final double totalPendapatan;
   final double totalPengeluaran;
   const MonthlyRecapTable({super.key, required this.monthlyData, required this.totalPendapatan, required this.totalPengeluaran});
+
   @override
   Widget build(BuildContext context) {
     if (monthlyData.isEmpty) return Card(child: Padding(padding: const EdgeInsets.all(32), child: Center(child: Text('Tidak ada data tahun ini', style: TextStyle(color: Colors.grey[500])))));
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 360),
-          child: Column(children: [
-            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: ungu.withOpacity(0.08), borderRadius: const BorderRadius.vertical(top: Radius.circular(12))), child: Row(children: const [SizedBox(width: 80, child: Text('Bulan', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12))), SizedBox(width: 90, child: Text('Pendapatan', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12), textAlign: TextAlign.right)), SizedBox(width: 90, child: Text('Pengeluaran', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12), textAlign: TextAlign.right)), SizedBox(width: 90, child: Text('Saldo', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12), textAlign: TextAlign.right)) ])),
-            ...monthlyData.map((m) => Container(padding: const EdgeInsets.symmetric(horizontal:12, vertical:8), decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFE0E0E0)))), child: Row(children: [SizedBox(width: 80, child: Text(m.namaBulan, style: const TextStyle(fontSize:12, fontWeight: FontWeight.w500))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(m.totalPendapatan), style: TextStyle(fontSize:12, color:hijauPendapatan), textAlign: TextAlign.right))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(m.totalPengeluaran), style: TextStyle(fontSize:12, color:merahPengeluaran), textAlign: TextAlign.right))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(m.saldo), style: TextStyle(fontSize:12, color: m.saldo>=0?hijauPendapatan:merahPengeluaran, fontWeight: FontWeight.w600), textAlign: TextAlign.right))) ]))),
-            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: ungu.withOpacity(0.08), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12))), child: Row(children: [const SizedBox(width: 80, child: Text('TOTAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(totalPendapatan), style: TextStyle(fontWeight: FontWeight.bold, fontSize:12, color:hijauPendapatan), textAlign: TextAlign.right))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(totalPengeluaran), style: TextStyle(fontWeight: FontWeight.bold, fontSize:12, color:merahPengeluaran), textAlign: TextAlign.right))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(totalPendapatan-totalPengeluaran), style: TextStyle(fontWeight: FontWeight.bold, fontSize:12, color:emasTeks), textAlign: TextAlign.right))) ])),
-          ]),
-        ),
-      ),
+    return Column(
+      children: [
+        ...monthlyData.map((m) => Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(Icons.calendar_month, size: 16, color: ungu),
+                const SizedBox(width: 8),
+                Text(m.namaBulan, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: textDark)),
+              ]),
+              const Divider(height: 16),
+              Row(children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Pendapatan', style: TextStyle(fontSize: 11, color: abuHangat)),
+                  const SizedBox(height: 2),
+                  Text(formatRupiah(m.totalPendapatan), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: hijauPendapatan)),
+                ])),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Pengeluaran', style: TextStyle(fontSize: 11, color: abuHangat)),
+                  const SizedBox(height: 2),
+                  Text(formatRupiah(m.totalPengeluaran), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: merahPengeluaran)),
+                ])),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Saldo', style: TextStyle(fontSize: 11, color: abuHangat)),
+                  const SizedBox(height: 2),
+                  Text(formatRupiah(m.saldo), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: m.saldo >= 0 ? hijauPendapatan : merahPengeluaran)),
+                ])),
+              ]),
+            ]),
+          ),
+        )),
+      ],
     );
   }
 }
 
-/// Weekly recap table for monthly mode (W1-5)
+/// Weekly recap table for monthly mode (W1-5) (Model Card Responsive)
 class WeeklyRecapTable extends StatelessWidget {
   final List<WeeklyRecap> weeklyData;
   final double totalPendapatan;
   final double totalPengeluaran;
   const WeeklyRecapTable({super.key, required this.weeklyData, required this.totalPendapatan, required this.totalPengeluaran});
+
   @override
   Widget build(BuildContext context) {
     if (weeklyData.isEmpty) return Card(child: Padding(padding: const EdgeInsets.all(32), child: Center(child: Text('Tidak ada data minggu ini', style: TextStyle(color: Colors.grey[500])))));
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 360),
-          child: Column(children: [
-            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: ungu.withOpacity(0.08), borderRadius: const BorderRadius.vertical(top: Radius.circular(12))), child: Row(children: const [SizedBox(width: 80, child: Text('Minggu', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12))), SizedBox(width: 90, child: Text('Pendapatan', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12), textAlign: TextAlign.right)), SizedBox(width: 90, child: Text('Pengeluaran', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12), textAlign: TextAlign.right)), SizedBox(width: 90, child: Text('Saldo', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12), textAlign: TextAlign.right)) ])),
-            ...weeklyData.map((w) => Container(padding: const EdgeInsets.symmetric(horizontal:12, vertical:8), decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFE0E0E0)))), child: Row(children: [SizedBox(width: 80, child: Text('${w.namaMinggu} (${w.rentang})', style: const TextStyle(fontSize:12, fontWeight: FontWeight.w500))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(w.totalPendapatan), style: TextStyle(fontSize:12, color:hijauPendapatan), textAlign: TextAlign.right))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(w.totalPengeluaran), style: TextStyle(fontSize:12, color:merahPengeluaran), textAlign: TextAlign.right))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(w.saldo), style: TextStyle(fontSize:12, color: w.saldo>=0?hijauPendapatan:merahPengeluaran, fontWeight: FontWeight.w600), textAlign: TextAlign.right))) ]))),
-            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: ungu.withOpacity(0.08), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12))), child: Row(children: [const SizedBox(width: 80, child: Text('TOTAL', style: TextStyle(fontWeight: FontWeight.bold, fontSize:12))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(totalPendapatan), style: TextStyle(fontWeight: FontWeight.bold, fontSize:12, color:hijauPendapatan), textAlign: TextAlign.right))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(totalPengeluaran), style: TextStyle(fontWeight: FontWeight.bold, fontSize:12, color:merahPengeluaran), textAlign: TextAlign.right))), SizedBox(width: 90, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(totalPendapatan-totalPengeluaran), style: TextStyle(fontWeight: FontWeight.bold, fontSize:12, color:emasTeks), textAlign: TextAlign.right))) ])),
-          ]),
-        ),
-      ),
+    return Column(
+      children: [
+        ...weeklyData.map((w) => Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Icon(Icons.date_range, size: 16, color: ungu),
+                const SizedBox(width: 8),
+                Text('${w.namaMinggu} (${w.rentang})', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: textDark)),
+              ]),
+              const Divider(height: 16),
+              Row(children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Pendapatan', style: TextStyle(fontSize: 11, color: abuHangat)),
+                  const SizedBox(height: 2),
+                  Text(formatRupiah(w.totalPendapatan), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: hijauPendapatan)),
+                ])),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Pengeluaran', style: TextStyle(fontSize: 11, color: abuHangat)),
+                  const SizedBox(height: 2),
+                  Text(formatRupiah(w.totalPengeluaran), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: merahPengeluaran)),
+                ])),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Saldo', style: TextStyle(fontSize: 11, color: abuHangat)),
+                  const SizedBox(height: 2),
+                  Text(formatRupiah(w.saldo), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: w.saldo >= 0 ? hijauPendapatan : merahPengeluaran)),
+                ])),
+              ]),
+            ]),
+          ),
+        )),
+      ],
     );
   }
 }

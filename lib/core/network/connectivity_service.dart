@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 // ponytail: stream bool online, debounce 1s biar tidak spam sync saat flicker
 class ConnectivityService {
@@ -21,13 +22,12 @@ class ConnectivityService {
       final r = await _c.checkConnectivity().timeout(const Duration(seconds: 2));
       final online = !_isNone(r);
       // web: connectivity_plus kadang none padahal online, anggap online jika bukan mobile
-      if (!online) {
-        // fallback: coba fetch tidak, anggap online di web
+      if (!online && kIsWeb) {
         return true;
       }
       return online;
     } catch (_) {
-      return true; // fallback online biar sync tidak blok
+      return !kIsWeb; // fallback offline di mobile agar tidak stuck sync
     }
   }
 

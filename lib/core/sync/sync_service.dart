@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../auth/token_storage.dart';
 import '../network/connectivity_service.dart';
+import '../network/http_client.dart';
 import '../../data/local/app_database.dart';
 
 // ponytail: push bulk, retryCount 3x max, last-write-wins di BE
@@ -26,12 +28,13 @@ class SyncService {
     required this.tokenStorage,
     required this.connectivity,
     required this.pushToServer,
-    this.baseUrl = 'keuskupanlaboanbajobe-production.up.railway.app:8080',
+    required this.baseUrl,
     this.debounce = const Duration(seconds: 1),
   });
 
   // default push pakai http ke BE - BE expects {"items":[...]}
   static PushFn defaultPush(String baseUrl) {
+    final client = getSecurityClient();
     return (pending, token) async {
       final url = Uri.parse('$baseUrl/api/v1/sync/push');
       final items = pending.map((e) {
@@ -49,8 +52,11 @@ class SyncService {
         };
       }).toList();
       final body = jsonEncode({"items": items});
-      final res = await http.post(url,
+      debugPrint('SYNC PUSH URL: $url');
+      debugPrint('SYNC PUSH BODY: $body');
+      final res = await client.post(url,
           headers: {"Content-Type": "application/json", "Authorization": "Bearer $token"}, body: body);
+      debugPrint('SYNC PUSH STATUS: ${res.statusCode} BODY: ${res.body}');
       return res.statusCode >= 200 && res.statusCode < 300;
     };
   }
@@ -89,11 +95,22 @@ class SyncService {
     try {
       final since = await _getLastPull();
       final url = Uri.parse('$baseUrl/api/v1/sync/pull?since=${since.toIso8601String()}');
+      debugPrint('SYNC PULL URL: $url');
       final res = await http.get(url, headers: {"Authorization": "Bearer $token"});
-      if (res.statusCode != 200) return false;
+      debugPrint('SYNC PULL STATUS: ${res.statusCode}');
+      debugPrint('SYNC PULL BODY LENGTH: ${res.body.length}');
+      if (res.statusCode != 200) {
+        debugPrint('SYNC PULL BODY: ${res.body}');
+        return false;
+      }
       final body = jsonDecode(res.body) as Map<String, dynamic>;
+      debugPrint('SYNC PULL KEYS: ${body.keys.toList()}');
+      debugPrint('SYNC PULL JURNALS COUNT: ${(body['jurnals'] as List?)?.length ?? 0}');
+      debugPrint('SYNC PULL PAROKIS COUNT: ${(body['parokis'] as List?)?.length ?? 0}');
       // master dulu biar FK jurnal tidak fail
-      for (final k in (body['keuskupans'] as List? ?? [])) {
+      final kList = (body['keuskupans'] as List? ?? []);
+      debugPrint('SYNC PULL: ${kList.length} keuskupans');
+      for (final k in kList) {
         final m = k as Map<String, dynamic>;
         final id = (m['ID'] ?? m['id']);
         if (id == null) continue;
@@ -105,32 +122,42 @@ class SyncService {
         final m = p as Map<String, dynamic>;
         final id = (m['ID'] ?? m['id']);
         if (id == null) continue;
+        final nama = m['Nama'] ?? m['nama'] ?? '';
+        // ponytail: dedupe by nama, server ID wins
+        await db.customStatement('DELETE FROM parokis WHERE nama = ? AND id != ?', [nama, id]);
         await db.customStatement(
             'INSERT OR REPLACE INTO parokis (id, nama, alamat, keuskupan_id, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, ?, 1)',
-            [id, m['Nama'] ?? m['nama'] ?? '', m['Alamat'] ?? m['alamat'] ?? '', m['KeuskupanID'] ?? m['keuskupan_id'] ?? 0, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
+            [id, nama, m['Alamat'] ?? m['alamat'] ?? '', m['KeuskupanID'] ?? m['keuskupan_id'] ?? 0, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
       }
       for (final jn in (body['jenis'] as List? ?? [])) {
         final m = jn as Map<String, dynamic>;
         final id = (m['ID'] ?? m['id']);
         if (id == null) continue;
+        final nama = m['Nama'] ?? m['nama'] ?? '';
+        await db.customStatement('DELETE FROM jenis WHERE nama = ? AND id != ?', [nama, id]);
         await db.customStatement('INSERT OR REPLACE INTO jenis (id, nama, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, 1)',
-            [id, m['Nama'] ?? m['nama'] ?? '', DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
+            [id, nama, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
       }
       for (final a in (body['akuns'] as List? ?? [])) {
         final m = a as Map<String, dynamic>;
         final id = (m['ID'] ?? m['id']);
         if (id == null) continue;
+        final kode = m['Kode'] ?? m['kode'] ?? '';
+        // ponytail: dedupe by kode (unique business key), server ID wins
+        await db.customStatement('DELETE FROM akuns WHERE kode = ? AND id != ?', [kode, id]);
         await db.customStatement(
             'INSERT OR REPLACE INTO akuns (id, kode, nama, jenis_id, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, ?, 1)',
-            [id, m['Kode'] ?? m['kode'] ?? '', m['Nama'] ?? m['nama'] ?? '', m['JenisID'] ?? m['jenis_id'] ?? 0, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
+            [id, kode, m['Nama'] ?? m['nama'] ?? '', m['JenisID'] ?? m['jenis_id'] ?? 0, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
       }
       for (final r in (body['roles'] as List? ?? [])) {
         final m = r as Map<String, dynamic>;
         final id = (m['ID'] ?? m['id']);
         if (id == null) continue;
+        final nama = m['Nama'] ?? m['nama'] ?? '';
+        await db.customStatement('DELETE FROM roles WHERE nama = ? AND id != ?', [nama, id]);
         await db.customStatement(
             'INSERT OR REPLACE INTO roles (id, nama, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, 1)',
-            [id, m['Nama'] ?? m['nama'] ?? '', DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
+            [id, nama, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
       }
       for (final u in (body['users'] as List? ?? [])) {
         final m = u as Map<String, dynamic>;
@@ -162,6 +189,8 @@ class SyncService {
             'INSERT OR REPLACE INTO jurnals (id, keuskupan_id, tanggal, deskripsi, no_bukti, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, ?, ?, 1)',
             [id, keuskupanId, tanggal.toIso8601String().substring(0, 10), m['Deskripsi'] ?? m['deskripsi'], m['NoBukti'] ?? m['no_bukti'], DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
         final detils = m['DetilJurnal'] as List? ?? m['detil_jurnal'] as List? ?? [];
+        // ponytail: hapus detil lama untuk jurnal ini agar tidak duplikat saat pull
+        await db.customStatement('DELETE FROM detil_jurnals WHERE jurnal_id = ?', [id]);
         for (final d in detils) {
           final dm = d as Map<String, dynamic>;
           final did = (dm['ID'] ?? dm['id']);
@@ -180,8 +209,11 @@ class SyncService {
         await db.customStatement('UPDATE detil_jurnals SET deleted_at = ? WHERE jurnal_id = ?', [DateTime.now().millisecondsSinceEpoch, id]);
       }
       await _setLastPull(DateTime.now());
+      debugPrint('SYNC PULL SUCCESS');
       return true;
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('SYNC PULL ERROR: $e');
+      debugPrint('SYNC PULL STACK: $st');
       return false;
     }
   }
@@ -220,7 +252,8 @@ class SyncService {
         }
       }
       // 2. pull dari server (biar HP lain dapat data)
-      await _pull(baseUrl, token);
+      final pullOk = await _pull(baseUrl, token);
+      debugPrint('SYNC PULL RESULT: $pullOk');
       return true;
     } finally {
       _syncing = false;

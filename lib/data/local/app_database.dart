@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:drift/drift.dart';
+import 'package:drift/native.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
 part 'app_database.g.dart';
@@ -140,6 +142,16 @@ class AppDatabase extends _$AppDatabase {
                 driftWorker: Uri.parse('drift_worker.js'),
               ),
             ));
+
+  /// Factory untuk buka database terenkripsi (SQLCipher)
+  static AppDatabase encrypted(File file, String key) {
+    return AppDatabase(NativeDatabase(
+      file,
+      setup: (db) {
+        db.execute("PRAGMA key = '$key';");
+      },
+    ));
+  }
 
   @override
   int get schemaVersion => 5;

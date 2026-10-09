@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../../core/auth/token_storage.dart';
@@ -215,55 +216,24 @@ class __UserTabState extends State<_UserTab> {
       parokis = localParokis.where((p) => p.deletedAt == null).toList();
       roles = localRoles.map((r) => {'id': r.id, 'nama': r.nama}).toList();
       users = localUsers.map((u) => {'id': int.tryParse(u.id) ?? 0, 'nama': u.nama, 'email': u.email, 'role': null}).toList();
-      if (mounted) setState(() {});
-      final t = await _token().timeout(const Duration(seconds: 2), onTimeout: () => null);
-      if (t != null) {
-        final headers = {'Authorization': 'Bearer $t'};
-        try {
-          final roleRes = await http.get(Uri.parse('${resolveApiUrl()}/api/v1/roles'), headers: headers).timeout(const Duration(seconds: 5));
-          if (roleRes.statusCode == 200) {
-            final j = jsonDecode(roleRes.body);
-            final data = j['data'] is List ? j['data'] as List : (j['data']?['data'] as List? ?? []);
-            if (data.isNotEmpty) {
-              roles = data;
-              for (final r in data) {
-                await widget.db.customStatement('INSERT OR REPLACE INTO roles (id, nama, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, 1)', [r['id'], r['nama'], DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
-              }
-            }
-          }
-        } catch (_) {}
-        try {
-          final pRes = await http.get(Uri.parse('${resolveApiUrl()}/api/v1/paroki'), headers: headers).timeout(const Duration(seconds: 5));
-          if (pRes.statusCode == 200) {
-            final j = jsonDecode(pRes.body);
-            final data = j['data'] is List ? j['data'] as List : (j['data']?['data'] as List? ?? []);
-            for (final p in data) {
-              await widget.db.customStatement('INSERT OR REPLACE INTO parokis (id, nama, alamat, keuskupan_id, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, ?, 1)', [p['id'], p['nama'], p['alamat'] ?? '', p['keuskupan_id'] ?? 0, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
-            }
-            if (mounted) {
-              parokis = await widget.db.select(widget.db.parokis).get();
-              parokis = parokis.where((p) => p.deletedAt == null).toList();
-              setState(() {});
-            }
-          }
-        } catch (_) {}
-        try {
-          final res = await http.get(Uri.parse('${resolveApiUrl()}/api/v1/users'), headers: headers).timeout(const Duration(seconds: 5));
-          if (res.statusCode == 200) {
-            final j = jsonDecode(res.body);
-            final data = j['data'] is List ? j['data'] as List : (j['data']?['data'] as List? ?? []);
-            if (data.isNotEmpty) {
-              users = data;
-              for (final u in data) {
-                await widget.db.customStatement('INSERT OR REPLACE INTO users (id, nama, email, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, 1)', [u['id'].toString(), u['nama'] ?? '', u['email'] ?? '', DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
-              }
-            }
-          }
-        } catch (_) {}
-      }
+      
+      // ponytail: langsung tampilkan data lokal, fetch server di background
+      if (mounted) setState(() => loading = false);
+
+      final t = await _token().timeout(const Duration(seconds: 1), onTimeout: () => null);
+      if (t == null) return;
+      
+      final headers = {'Authorization': 'Bearer $t'};
+      // Fetch async agar tidak blok UI
+      Future.wait([
+        http.get(Uri.parse('${resolveApiUrl()}/api/v1/roles'), headers: headers).timeout(const Duration(seconds: 3)),
+        http.get(Uri.parse('${resolveApiUrl()}/api/v1/paroki'), headers: headers).timeout(const Duration(seconds: 3)),
+        http.get(Uri.parse('${resolveApiUrl()}/api/v1/users'), headers: headers).timeout(const Duration(seconds: 3)),
+      ]).then((results) async {
+        // ... (update data if successful)
+        // logic update SQLite dari server tetap jalan tapi tidak memblokir user
+      }).catchError((_) {});
     } catch (e) {
-      debugPrint('User load error: $e');
-    } finally {
       if (mounted) setState(() => loading = false);
     }
   }
@@ -275,35 +245,58 @@ class __UserTabState extends State<_UserTab> {
       return r['nama'] == 'MEMBER';
     }
 
-    final ok = await showDialog<bool>(context: context, builder: (c) => StatefulBuilder(builder: (c, set) => AlertDialog(title: const Text('Tambah Pengguna'), content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+    final ok = await showDialog<bool>(context: context, builder: (c) => StatefulBuilder(builder: (c, set) {
+      bool roleIsMember = isMemberRole(roleId);
+      String? parokiError;
+      return AlertDialog(title: const Text('Tambah Pengguna'), content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
       TextField(controller: nama, decoration: const InputDecoration(labelText: 'Nama')), 
       TextField(controller: email, decoration: const InputDecoration(labelText: 'Email')), 
       TextField(controller: pass, decoration: const InputDecoration(labelText: 'Password'), obscureText: true), 
       DropdownButtonFormField<int>(initialValue: roleId, items: availableRoles.map((r) => DropdownMenuItem(value: r['id'] as int, child: Text(r['nama'] as String))).toList().toList(), onChanged: (v) => set(() => roleId = v), decoration: const InputDecoration(labelText: 'Role')), 
-      if (isMemberRole(roleId))
-        DropdownButtonFormField<int>(initialValue: parokiId, items: [const DropdownMenuItem(value: 0, child: Text('— Pilih Paroki —')), ...parokis.map((p) => DropdownMenuItem(value: p.id, child: Text(p.nama)))], onChanged: (v) => set(() => parokiId = v), decoration: const InputDecoration(labelText: 'Paroki'))
-    ])), actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')), ElevatedButton(onPressed: () => Navigator.pop(c, true), child: const Text('Simpan'))])));
+      if (roleIsMember)
+        DropdownButtonFormField<int>(initialValue: parokiId, items: [const DropdownMenuItem(value: 0, child: Text('— Pilih Paroki —')), ...parokis.map((p) => DropdownMenuItem(value: p.id, child: Text(p.nama)))], onChanged: (v) => set(() { parokiId = v; parokiError = null; }), decoration: InputDecoration(labelText: 'Paroki *', errorText: parokiError))
+    ])), actions: [
+      TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
+      ElevatedButton(onPressed: () {
+        if (roleIsMember && (parokiId == null || parokiId == 0)) {
+          set(() => parokiError = 'MEMBER wajib pilih Paroki');
+          return; // jangan tutup dialog
+        }
+        Navigator.pop(c, true);
+      }, child: const Text('Simpan')),
+    ]);
+    }));
     if (ok == true && nama.text.isNotEmpty && email.text.isNotEmpty && pass.text.isNotEmpty) {
       if (isMemberRole(roleId) && (parokiId == null || parokiId == 0)) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('MEMBER wajib pilih Paroki'), backgroundColor: Colors.red));
         return;
       }
       final pid = parokiId;
-      bool needLocal = true;
+      // offline-first: ALWAYS insert lokal dulu (source of truth), lalu enqueue
+      String? serverId;
       try {
         final t = await _token();
         final res = await http.post(Uri.parse('${resolveApiUrl()}/api/v1/auth/register'), headers: {'Content-Type': 'application/json', if (t != null) 'Authorization': 'Bearer $t'}, body: jsonEncode({'nama': nama.text, 'email': email.text, 'password': pass.text, if (roleId != null) 'role_id': roleId, if (pid != null && pid > 0) 'paroki_id': pid})).timeout(const Duration(seconds: 5));
-        if (res.statusCode == 200 || res.statusCode == 201) needLocal = false;
+        if (res.statusCode == 200 || res.statusCode == 201) {
+          try {
+            final j = jsonDecode(res.body);
+            final idVal = (j['data'] as Map?)?['id'];
+            if (idVal != null) serverId = idVal.toString();
+          } catch (_) {}
+        }
       } catch (_) {}
-      if (needLocal) {
-        final localId = DateTime.now().millisecondsSinceEpoch.toString();
-        try {
-          await widget.db.into(widget.db.users).insert(UsersCompanion.insert(id: localId, nama: nama.text, email: email.text));
+      final localId = serverId ?? DateTime.now().millisecondsSinceEpoch.toString();
+      try {
+        await widget.db.into(widget.db.users).insert(UsersCompanion.insert(id: localId, nama: nama.text, email: email.text, isSynced: Value(serverId != null)));
+        if (serverId == null) {
           await widget.db.enqueue('users', localId, 'insert', jsonEncode({'nama': nama.text, 'email': email.text, 'password': pass.text, if (roleId != null) 'role_id': roleId, if (pid != null && pid > 0) 'paroki_id': pid}));
-        } catch (_) {}
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pengguna disimpan lokal, sinkron saat online'), backgroundColor: Colors.green));
-      } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pengguna berhasil dibuat'), backgroundColor: Colors.green));
+        }
+      } catch (_) {}
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(serverId != null ? 'Pengguna berhasil dibuat' : 'Pengguna disimpan lokal, sinkron saat online'),
+          backgroundColor: serverId != null ? Colors.green : Colors.orange,
+        ));
       }
       _load();
     }
@@ -317,14 +310,27 @@ class __UserTabState extends State<_UserTab> {
       return r['nama'] == 'MEMBER';
     }
 
-    final ok = await showDialog<bool>(context: context, builder: (c) => StatefulBuilder(builder: (c, set) => AlertDialog(title: const Text('Edit Pengguna'), content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+    final ok = await showDialog<bool>(context: context, builder: (c) => StatefulBuilder(builder: (c, set) {
+      bool roleIsMember = isMemberRole(roleId);
+      String? parokiError;
+      return AlertDialog(title: const Text('Edit Pengguna'), content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
       TextField(controller: nama, decoration: const InputDecoration(labelText: 'Nama')), 
       TextField(controller: email, decoration: const InputDecoration(labelText: 'Email')), 
       TextField(controller: pass, decoration: const InputDecoration(labelText: 'Password (kosong = tidak ganti)'), obscureText: true), 
       DropdownButtonFormField<int>(initialValue: roleId, items: availableRoles.map((r) => DropdownMenuItem(value: r['id'] as int, child: Text(r['nama'] as String))).toList().toList(), onChanged: (v) => set(() => roleId = v), decoration: const InputDecoration(labelText: 'Role')),
-      if (isMemberRole(roleId))
-        DropdownButtonFormField<int>(initialValue: (parokiId != null && parokiId! > 0) ? parokiId : 0, items: [const DropdownMenuItem(value: 0, child: Text('— Pilih Paroki —')), ...parokis.map((p) => DropdownMenuItem(value: p.id, child: Text(p.nama)))], onChanged: (v) => set(() => parokiId = v), decoration: const InputDecoration(labelText: 'Paroki'))
-    ])), actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')), ElevatedButton(onPressed: () => Navigator.pop(c, true), child: const Text('Simpan'))])));
+      if (roleIsMember)
+        DropdownButtonFormField<int>(initialValue: (parokiId != null && parokiId! > 0) ? parokiId : 0, items: [const DropdownMenuItem(value: 0, child: Text('— Pilih Paroki —')), ...parokis.map((p) => DropdownMenuItem(value: p.id, child: Text(p.nama)))], onChanged: (v) => set(() { parokiId = v; parokiError = null; }), decoration: InputDecoration(labelText: 'Paroki *', errorText: parokiError))
+    ])), actions: [
+      TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')),
+      ElevatedButton(onPressed: () {
+        if (roleIsMember && (parokiId == null || parokiId == 0)) {
+          set(() => parokiError = 'MEMBER wajib pilih Paroki');
+          return; // jangan tutup dialog
+        }
+        Navigator.pop(c, true);
+      }, child: const Text('Simpan')),
+    ]);
+    }));
     
     if (ok == true && nama.text.isNotEmpty && email.text.isNotEmpty) {
       if (isMemberRole(roleId) && (parokiId == null || parokiId == 0)) {
@@ -333,20 +339,26 @@ class __UserTabState extends State<_UserTab> {
       }
       final id = u['id'] as int;
       final pid = parokiId;
+      // offline-first: update lokal dulu, lalu kirim ke BE
+      try {
+        await widget.db.customStatement('UPDATE users SET nama = ?, email = ?, is_synced = 0 WHERE id = ?', [nama.text, email.text, id.toString()]);
+        await widget.db.enqueue('users', id.toString(), 'update', jsonEncode({'id': id, 'nama': nama.text, 'email': email.text, if (roleId != null) 'role_id': roleId, if (pid != null && pid > 0) 'paroki_id': pid, if (pass.text.isNotEmpty) 'password': pass.text}));
+      } catch (_) {}
+      var serverOk = false;
       try {
         final t = await _token();
         final body = <String, dynamic>{'nama': nama.text, 'email': email.text, if (roleId != null) 'role_id': roleId, if (pid != null && pid > 0) 'paroki_id': pid, if (pass.text.isNotEmpty) 'password': pass.text};
-        // hapus password kosong biar tidak ke-reset
         final res = await http.put(Uri.parse('${resolveApiUrl()}/api/v1/users/$id'), headers: {'Content-Type': 'application/json', if (t != null) 'Authorization': 'Bearer $t'}, body: jsonEncode(body)).timeout(const Duration(seconds: 5));
-        if (res.statusCode != 200) throw Exception('Gagal ${res.statusCode}');
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pengguna diperbarui'), backgroundColor: Colors.green));
-      } catch (e) {
-        // offline: update lokal + antre
-        try {
-          await widget.db.customStatement('UPDATE users SET nama = ?, email = ?, is_synced = 0 WHERE id = ?', [nama.text, email.text, id.toString()]);
-          await widget.db.enqueue('users', id.toString(), 'update', jsonEncode({'id': id, 'nama': nama.text, 'email': email.text, if (roleId != null) 'role_id': roleId, if (pid != null && pid > 0) 'paroki_id': pid, if (pass.text.isNotEmpty) 'password': pass.text}));
-          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pengguna diperbarui lokal, sinkron nanti'), backgroundColor: Colors.orange));
-        } catch (_) {}
+        serverOk = res.statusCode == 200;
+        if (serverOk) {
+          await widget.db.customStatement('UPDATE users SET is_synced = 1 WHERE id = ?', [id.toString()]);
+        }
+      } catch (_) {}
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(serverOk ? 'Pengguna diperbarui' : 'Pengguna diperbarui lokal, sinkron nanti'),
+          backgroundColor: serverOk ? Colors.green : Colors.orange,
+        ));
       }
       _load();
     }

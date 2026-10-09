@@ -6,7 +6,7 @@
 class RecapKeuskupanResult {
   final double totalDebit;
   final double totalKredit;
-  double get saldo => totalDebit - totalKredit;
+  double get saldo => totalKredit - totalDebit; // Saldo = Pendapatan (kredit) - Pengeluaran (debit)
   double get totalPendapatan => totalKredit; // Pendapatan = Kredit
   double get totalPengeluaran => totalDebit; // Pengeluaran = Debit
 
@@ -21,7 +21,7 @@ class RecapParokiSummary {
   final String parokiNama;
   final double totalDebit;
   final double totalKredit;
-  double get saldo => totalDebit - totalKredit;
+  double get saldo => totalKredit - totalDebit; // Saldo = Pendapatan (kredit) - Pengeluaran (debit)
   double get totalPendapatan => totalKredit;
   double get totalPengeluaran => totalDebit;
 
@@ -41,7 +41,7 @@ class RecapAkunDetail {
   final String jenisNama;
   final double totalDebit;
   final double totalKredit;
-  double get saldo => totalDebit - totalKredit;
+  double get saldo => totalKredit - totalDebit; // Saldo = Pendapatan (kredit) - Pengeluaran (debit)
   double get totalPendapatan => totalKredit;
   double get totalPengeluaran => totalDebit;
 
@@ -62,7 +62,7 @@ class MonthlyRecap {
   final double totalDebit;
   final double totalKredit;
   
-  double get saldo => totalDebit - totalKredit;
+  double get saldo => totalKredit - totalDebit; // Saldo = Pendapatan (kredit) - Pengeluaran (debit)
   double get totalPendapatan => totalKredit;
   double get totalPengeluaran => totalDebit;
   
@@ -87,7 +87,7 @@ class WeeklyRecap {
   final double totalDebit;
   final double totalKredit;
 
-  double get saldo => totalDebit - totalKredit;
+  double get saldo => totalKredit - totalDebit; // Saldo = Pendapatan (kredit) - Pengeluaran (debit)
   double get totalPendapatan => totalKredit;
   double get totalPengeluaran => totalDebit;
 

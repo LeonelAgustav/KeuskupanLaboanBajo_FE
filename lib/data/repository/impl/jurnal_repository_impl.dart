@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import '../../local/app_database.dart';
 import '../../../core/auth/token_storage.dart';
+import '../../../core/utils/sanitizer.dart';
 import '../interfaces/jurnal_repository.dart';
 
 class JurnalRepositoryImpl implements JurnalRepository {
@@ -49,17 +50,19 @@ class JurnalRepositoryImpl implements JurnalRepository {
     List<DetilJurnalsCompanion> detils = const [],
   }) async {
     final userId = await _getUserId();
+    final cleanDeskripsi = InputSanitizer.sanitizeText(deskripsi);
+    final cleanNoBukti = InputSanitizer.sanitizeText(noBukti);
     final id = _uuid.v4();
     await db.transaction(() async {
       await db.into(db.jurnals).insert(JurnalsCompanion.insert(
         id: id,
         keuskupanId: keuskupanId,
         tanggal: tanggal,
-        deskripsi: Value(deskripsi),
-        noBukti: Value(noBukti),
+        deskripsi: Value(cleanDeskripsi),
+        noBukti: Value(cleanNoBukti),
         createdBy: Value(userId),
       ));
-      await db.enqueue('jurnals', id, 'insert', jsonEncode({"id": id, "keuskupan_id": keuskupanId, "tanggal": tanggal.toIso8601String(), "deskripsi": deskripsi, "no_bukti": noBukti, "created_by": userId}));
+      await db.enqueue('jurnals', id, 'insert', jsonEncode({"id": id, "keuskupan_id": keuskupanId, "tanggal": tanggal.toIso8601String(), "deskripsi": cleanDeskripsi, "no_bukti": cleanNoBukti, "created_by": userId}));
       for (final d in detils) {
         final comp = d.copyWith(jurnalId: Value(id));
         final detilId = (await db.into(db.detilJurnals).insertReturning(comp)).id;
@@ -82,12 +85,14 @@ class JurnalRepositoryImpl implements JurnalRepository {
   @override
   Future<void> update(String id, {int? keuskupanId, DateTime? tanggal, String? deskripsi, String? noBukti, List<DetilJurnalsCompanion>? detils}) async {
     final userId = await _getUserId();
+    final cleanDeskripsi = InputSanitizer.sanitizeText(deskripsi);
+    final cleanNoBukti = InputSanitizer.sanitizeText(noBukti);
     // Update header
     final comp = JurnalsCompanion(
       keuskupanId: keuskupanId != null ? Value(keuskupanId) : const Value.absent(),
       tanggal: tanggal != null ? Value(tanggal) : const Value.absent(),
-      deskripsi: deskripsi != null ? Value(deskripsi) : const Value.absent(),
-      noBukti: noBukti != null ? Value(noBukti) : const Value.absent(),
+      deskripsi: deskripsi != null ? Value(cleanDeskripsi) : const Value.absent(),
+      noBukti: noBukti != null ? Value(cleanNoBukti) : const Value.absent(),
       updatedAt: Value(DateTime.now()),
       updatedBy: Value(userId),
       isSynced: const Value(false),

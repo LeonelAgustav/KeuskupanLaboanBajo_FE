@@ -15,24 +15,57 @@ import 'features/master/screens/master_screen.dart';
 import 'features/recap/screens/recap_keuskupan_screen.dart';
 
 // ponytail: 1 codebase untuk app + website, responsive nav
-void main() {
-  runApp(const MyApp());
+import 'dart:io';
+import 'package:drift/drift.dart' hide Column;
+import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'core/auth/jwt_helper.dart';
+import 'core/auth/token_storage.dart';
+import 'core/config/api_config.dart';
+import 'core/network/connectivity_service.dart';
+import 'core/security/db_key_service.dart';
+import 'core/sync/sync_service.dart';
+import 'core/theme.dart';
+import 'data/local/app_database.dart';
+import 'features/dashboard/screens/dashboard_screen.dart';
+import 'features/auth/screens/login_screen.dart';
+import 'features/jurnal/screens/jurnal_list_screen.dart';
+import 'features/recap/widgets/recap_widgets.dart';
+import 'features/master/screens/master_screen.dart';
+import 'features/recap/screens/recap_keuskupan_screen.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  AppDatabase db;
+  if (kIsWeb) {
+    db = AppDatabase();
+  } else {
+    final key = await DbKeyService().getKey();
+    final docDir = await getApplicationDocumentsDirectory();
+    final dbFile = File(p.join(docDir.path, 'keuskupan_local.sqlite'));
+    db = AppDatabase.encrypted(dbFile, key);
+  }
+  runApp(MyApp(db: db));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final AppDatabase db;
+  const MyApp({super.key, required this.db});
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Keuskupan Labuan Bajo',
       theme: appTheme,
-      home: const AuthGate(),
+      home: AuthGate(db: db),
     );
   }
 }
 
 class AuthGate extends StatefulWidget {
-  const AuthGate({super.key});
+  final AppDatabase db;
+  const AuthGate({super.key, required this.db});
   @override
   State<AuthGate> createState() => _AuthGateState();
 }
@@ -43,19 +76,20 @@ class _AuthGateState extends State<AuthGate> {
   Future<bool> _check() async => await _tokens.hasValidAccessToken() || await _tokens.hasValidRefreshToken();
   void _refresh() => setState(() { _hasSession = _check(); });
   @override
-  Widget build(BuildContext context) => FutureBuilder<bool>(future: _hasSession, builder: (c, s) { if (!s.hasData) return const Scaffold(body: Center(child: CircularProgressIndicator())); return s.data! ? HomeTabs(onLogout: _refresh) : LoginScreen(tokens: _tokens, baseUrl: resolveApiUrl(), onSuccess: _refresh); });
+  Widget build(BuildContext context) => FutureBuilder<bool>(future: _hasSession, builder: (c, s) { if (!s.hasData) return const Scaffold(body: Center(child: CircularProgressIndicator())); return s.data! ? HomeTabs(db: widget.db, onLogout: _refresh) : LoginScreen(tokens: _tokens, baseUrl: resolveApiUrl(), onSuccess: _refresh); });
 }
 
 class HomeTabs extends StatefulWidget {
+  final AppDatabase db;
   final VoidCallback? onLogout;
-  const HomeTabs({super.key, this.onLogout});
+  const HomeTabs({super.key, required this.db, this.onLogout});
   @override
   State<HomeTabs> createState() => _HomeTabsState();
 }
 
 class _HomeTabsState extends State<HomeTabs> with WidgetsBindingObserver {
   int _idx = 0;
-  late final AppDatabase _db = AppDatabase();
+  late final AppDatabase _db = widget.db;
   late final TokenStorageI _tokens = TokenStorage();
   late final ConnectivityService _conn = ConnectivityService();
   late final SyncService _sync = SyncService(
@@ -101,19 +135,21 @@ class _HomeTabsState extends State<HomeTabs> with WidgetsBindingObserver {
   }
 
   Future<void> _doInitialSync() async {
-    if (await _conn.isOnline) {
-      final ok = await _sync.trySync();
-      if (mounted) setState(() { _initialSyncDone = true; _syncLog = ok ? 'Auto-pull OK' : 'Auto-pull gagal (offline mode)'; });
-    } else {
-      if (mounted) setState(() { _initialSyncDone = true; _syncLog = 'Offline mode - data lokal'; });
+    // ponytail: dashboard jangan tunggu sync, tampil dulu baru sync background
+    if (mounted) setState(() => _initialSyncDone = true);
+    if (!await _conn.isOnline) {
+      if (mounted) setState(() => _syncLog = 'Offline mode - data lokal');
+      return;
     }
+    final ok = await _sync.trySync().timeout(const Duration(seconds: 8), onTimeout: () => false);
+    if (mounted) setState(() => _syncLog = ok ? 'Auto-pull OK' : 'Auto-pull gagal (offline mode)');
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _sync.stop();
-    _db.close();
+    // ponytail: biarkan DB tetap hidup sepanjang app berjalan agar tidak crash saat login ulang
     super.dispose();
   }
 
@@ -176,7 +212,7 @@ class _ProfilTab extends StatelessWidget {
                       Text(role == 'SUPERADMIN' ? 'SUPERADMIN: kelola Role + User + Master' : role == 'ADMIN' ? 'ADMIN: kelola User + Master (tanpa Role)' : 'MEMBER: hanya Jurnal/Rekap + Export', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
                     ]))),
             const SizedBox(height: 12),
-            SizedBox(width: double.infinity, child: FilledButton.icon(icon: const Icon(Icons.logout), label: const Text('Keluar'), style: FilledButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), onPressed: () async { await TokenStorage().clear(); await Future.delayed(const Duration(milliseconds: 100)); if (onLogout != null) onLogout!(); else if (context.mounted) { Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const AuthGate()), (_) => false); } })),
+            SizedBox(width: double.infinity, child: FilledButton.icon(icon: const Icon(Icons.logout), label: const Text('Keluar'), style: FilledButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), onPressed: () async { await TokenStorage().clear(); await Future.delayed(const Duration(milliseconds: 100)); if (onLogout != null) onLogout!(); })),
 
           ]),
         ),

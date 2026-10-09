@@ -1,10 +1,10 @@
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 import '../../../core/auth/token_storage.dart';
+import '../../../core/security/screenshot_guard.dart';
 import '../../../data/local/app_database.dart';
 import '../../../data/models/recap_models.dart';
 import '../../../data/repository/impl/master_repository_impl.dart';
-import '../../../data/repository/impl/jurnal_repository_impl.dart';
 import '../../../data/repository/impl/recap_repository_impl.dart';
 import '../widgets/recap_widgets.dart';
 import '../utils/pdf_export.dart';
@@ -41,9 +41,14 @@ class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
   @override
   void initState() {
     super.initState();
+    ScreenshotGuard.setSecure(true);
     _ownsDb = widget.db == null;
-    _initMemberFilter();
-    _loadData();
+    _boot();
+  }
+
+  Future<void> _boot() async {
+    await _initMemberFilter();
+    await _loadData();
   }
 
   Future<void> _initMemberFilter() async {
@@ -65,6 +70,7 @@ class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
 
   @override
   void dispose() {
+    ScreenshotGuard.setSecure(false);
     if (_ownsDb) _db.close();
     super.dispose();
   }
@@ -278,59 +284,8 @@ class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
 
           const SizedBox(height: 16),
 
-          // Section header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              'Rekap Per Paroki',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[700],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          // Paroki list
-          if (_parokiList.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Text(
-                  'Tidak ada paroki pada keuskupan ini',
-                  style: TextStyle(color: Colors.grey[500]),
-                ),
-              ),
-            )
-          else
-            ..._parokiList.map((p) => ParokiRecapCard(
-              summary: p,
-              onTap: () => _goToParokiDetail(p),
-            )),
-
-          // Monthly table for yearly mode
-          if (_mode == PeriodMode.year && _monthlyData.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'Rekap Bulanan (${_selectedDate.year})',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[700],
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            MonthlyRecapTable(
-              monthlyData: _monthlyData,
-              totalPendapatan: _recapResult?.totalKredit ?? 0,
-              totalPengeluaran: _recapResult?.totalDebit ?? 0,
-            ),
-          ],
-          // Weekly table for monthly mode
+          // Weekly table for monthly mode (PRIORITAS ATAS)
           if (_mode == PeriodMode.month && _weeklyData.isNotEmpty) ...[
-            const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
@@ -347,6 +302,60 @@ class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
               totalPendapatan: _recapResult?.totalKredit ?? 0,
               totalPengeluaran: _recapResult?.totalDebit ?? 0,
             ),
+            const SizedBox(height: 16),
+          ],
+
+          // Monthly table for yearly mode (PRIORITAS ATAS)
+          if (_mode == PeriodMode.year && _monthlyData.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Rekap Bulanan (${_selectedDate.year})',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            MonthlyRecapTable(
+              monthlyData: _monthlyData,
+              totalPendapatan: _recapResult?.totalKredit ?? 0,
+              totalPengeluaran: _recapResult?.totalDebit ?? 0,
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Rekap Per Paroki (HANYA untuk non-MEMBER)
+          if (_memberParokiId == null) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Rekap Per Paroki',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[700],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Paroki list
+            if (_parokiList.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(32),
+                child: Center(
+                  child: Text(
+                    'Tidak ada paroki pada keuskupan ini',
+                    style: TextStyle(color: Colors.grey[500]),
+                  ),
+                ),
+              )
+            else
+              ..._parokiList.map((p) => ParokiRecapCard(
+                summary: p,
+                onTap: () => _goToParokiDetail(p),
+              )),
           ],
 
           const SizedBox(height: 80), // padding for FAB

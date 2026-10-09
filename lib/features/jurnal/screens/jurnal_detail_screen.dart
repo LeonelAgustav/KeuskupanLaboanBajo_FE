@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme.dart';
 import '../../../core/auth/token_storage.dart';
+import '../../../core/security/screenshot_guard.dart';
 import '../../../data/local/app_database.dart';
 import '../../../data/repository/impl/jurnal_repository_impl.dart';
 import '../../../data/repository/impl/master_repository_impl.dart';
@@ -28,7 +29,14 @@ class _JurnalDetailScreenState extends State<JurnalDetailScreen> {
   @override
   void initState() {
     super.initState();
+    ScreenshotGuard.setSecure(true);
     _load();
+  }
+
+  @override
+  void dispose() {
+    ScreenshotGuard.setSecure(false);
+    super.dispose();
   }
 
   Future<void> _load() async {

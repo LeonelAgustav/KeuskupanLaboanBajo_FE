@@ -385,17 +385,23 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
                                 },
                                 validator: (v) => v == null ? 'Wajib' : null,
                               ),
-                              const SizedBox(height: 8),
-                              DropdownButtonFormField<int>(
-                                initialValue: d.parokiId,
-                                decoration: const InputDecoration(labelText: 'Paroki *', border: OutlineInputBorder(), isDense: true),
-                                items: _parokis.map((p) => DropdownMenuItem(value: p.id, child: Text(p.nama))).toList(),
-                                onChanged: _userParokiId != null ? null : (v) {
-                                  d.parokiId = v;
-                                  _onAnyChange();
-                                },
-                                validator: (v) => v == null ? 'Wajib' : null,
-                              ),
+                               const SizedBox(height: 8),
+                               DropdownButtonFormField<int>(
+                                 initialValue: d.parokiId,
+                                 decoration: InputDecoration(
+                                   labelText: 'Paroki *',
+                                   border: const OutlineInputBorder(),
+                                   isDense: true,
+                                   helperText: _userParokiId != null ? 'Paroki terkunci untuk akun MEMBER' : null,
+                                   helperStyle: const TextStyle(fontSize: 11, color: orangeKhas),
+                                 ),
+                                 items: _parokis.map((p) => DropdownMenuItem(value: p.id, child: Text(p.nama))).toList(),
+                                 onChanged: _userParokiId != null ? null : (v) {
+                                   d.parokiId = v;
+                                   _onAnyChange();
+                                 },
+                                 validator: (v) => v == null ? 'Wajib' : null,
+                               ),
                               const SizedBox(height: 8),
                               // Per-detil jenis transaksi
                               FittedBox(

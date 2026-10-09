@@ -1,5 +1,6 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:keuskupanlaboanbajo_fe/core/auth/jwt_helper.dart';
 import 'package:keuskupanlaboanbajo_fe/core/auth/token_storage.dart';
 import 'package:keuskupanlaboanbajo_fe/core/network/connectivity_service.dart';
@@ -8,6 +9,8 @@ import 'package:keuskupanlaboanbajo_fe/data/local/app_database.dart';
 import 'package:uuid/uuid.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues({});
   group('TokenStorage + Connectivity auto-sync', () {
     test('offline: simpan token, cek valid tanpa internet', () async {
       final storage = InMemoryTokenStorage();
@@ -45,6 +48,7 @@ final kId = (await db.into(db.keuskupans).insertReturning(KeuskupansCompanion.in
         db: db,
         tokenStorage: storage,
         connectivity: fakeConn,
+        baseUrl: 'http://test',
         pushToServer: (pending, token) async {
           pushCalled = true;
           expect(token.isNotEmpty, true);
@@ -87,6 +91,7 @@ final kId = (await db.into(db.keuskupans).insertReturning(KeuskupansCompanion.in
         db: db,
         tokenStorage: storage,
         connectivity: fakeConn,
+        baseUrl: 'http://test',
         pushToServer: (pending, token) async => false, // selalu gagal (BE down)
       );
 
@@ -121,18 +126,18 @@ final kId = (await db.into(db.keuskupans).insertReturning(KeuskupansCompanion.in
         db: db,
         tokenStorage: storage,
         connectivity: fakeConn,
-        pushToServer: (p, t) async {
+        baseUrl: 'http://test',
+        pushToServer: (pending, token) async {
           pushed = true;
           return true;
         },
-        debounce: Duration.zero,
       );
       sync.start();
       await Future.delayed(const Duration(milliseconds: 50));
       expect(pushed, false);
 
-      fakeConn.setOnline(true);
-      await Future.delayed(const Duration(milliseconds: 200));
+fakeConn.setOnline(true);
+      await Future.delayed(const Duration(milliseconds: 1500));
       expect(pushed, true);
       expect(await db.queueCount(), 0);
 

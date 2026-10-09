@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:drift/drift.dart';
 import '../../local/app_database.dart';
+import '../../../core/utils/sanitizer.dart';
 import '../interfaces/paroki_repository.dart';
 import '../interfaces/role_repository.dart';
 
@@ -13,15 +14,19 @@ class ParokiRepositoryImpl implements ParokiRepository {
   Future<Paroki?> getById(int id) => (db.select(db.parokis)..where((t) => t.id.equals(id))).getSingleOrNull();
   @override
   Future<int> create({required String nama, required String alamat, required int keuskupanId}) async {
-    final id = (await db.into(db.parokis).insertReturning(ParokisCompanion.insert(nama: nama, alamat: alamat, keuskupanId: keuskupanId))).id;
-    await db.enqueue('parokis', id.toString(), 'insert', jsonEncode({"id": id, "nama": nama, "alamat": alamat, "keuskupan_id": keuskupanId}));
+    final cleanNama = InputSanitizer.sanitizeText(nama) ?? nama;
+    final cleanAlamat = InputSanitizer.sanitizeText(alamat) ?? alamat;
+    final id = (await db.into(db.parokis).insertReturning(ParokisCompanion.insert(nama: cleanNama, alamat: cleanAlamat, keuskupanId: keuskupanId))).id;
+    await db.enqueue('parokis', id.toString(), 'insert', jsonEncode({"id": id, "nama": cleanNama, "alamat": cleanAlamat, "keuskupan_id": keuskupanId}));
     return id;
   }
   @override
   Future<void> update(int id, {String? nama, String? alamat, int? keuskupanId}) async {
+    final cleanNama = nama != null ? InputSanitizer.sanitizeText(nama) : null;
+    final cleanAlamat = alamat != null ? InputSanitizer.sanitizeText(alamat) : null;
     await (db.update(db.parokis)..where((t) => t.id.equals(id))).write(ParokisCompanion(
-      nama: nama != null ? Value(nama) : const Value.absent(),
-      alamat: alamat != null ? Value(alamat) : const Value.absent(),
+      nama: cleanNama != null ? Value(cleanNama) : const Value.absent(),
+      alamat: cleanAlamat != null ? Value(cleanAlamat) : const Value.absent(),
       keuskupanId: keuskupanId != null ? Value(keuskupanId) : const Value.absent(),
       isSynced: const Value(false),
     ));
@@ -43,15 +48,19 @@ class KeuskupanRepositoryImpl implements KeuskupanRepository {
   Future<Keuskupan?> getById(int id) => (db.select(db.keuskupans)..where((t) => t.id.equals(id))).getSingleOrNull();
   @override
   Future<int> create({required String nama, required String alamat}) async {
-    final id = (await db.into(db.keuskupans).insertReturning(KeuskupansCompanion.insert(nama: nama, alamat: alamat))).id;
-    await db.enqueue('keuskupans', id.toString(), 'insert', jsonEncode({"id": id, "nama": nama, "alamat": alamat}));
+    final cleanNama = InputSanitizer.sanitizeText(nama) ?? nama;
+    final cleanAlamat = InputSanitizer.sanitizeText(alamat) ?? alamat;
+    final id = (await db.into(db.keuskupans).insertReturning(KeuskupansCompanion.insert(nama: cleanNama, alamat: cleanAlamat))).id;
+    await db.enqueue('keuskupans', id.toString(), 'insert', jsonEncode({"id": id, "nama": cleanNama, "alamat": cleanAlamat}));
     return id;
   }
   @override
   Future<void> update(int id, {String? nama, String? alamat}) async {
+    final cleanNama = nama != null ? InputSanitizer.sanitizeText(nama) : null;
+    final cleanAlamat = alamat != null ? InputSanitizer.sanitizeText(alamat) : null;
     await (db.update(db.keuskupans)..where((t) => t.id.equals(id))).write(KeuskupansCompanion(
-      nama: nama != null ? Value(nama) : const Value.absent(),
-      alamat: alamat != null ? Value(alamat) : const Value.absent(),
+      nama: cleanNama != null ? Value(cleanNama) : const Value.absent(),
+      alamat: cleanAlamat != null ? Value(cleanAlamat) : const Value.absent(),
       isSynced: const Value(false),
     ));
     await db.enqueue('keuskupans', id.toString(), 'update', '{"id":"$id"}');
@@ -72,15 +81,19 @@ class AkunRepositoryImpl implements AkunRepository {
   Future<Akun?> getById(int id) => (db.select(db.akuns)..where((t) => t.id.equals(id))).getSingleOrNull();
   @override
   Future<int> create({required String kode, required String nama, required int jenisId}) async {
-    final id = (await db.into(db.akuns).insertReturning(AkunsCompanion.insert(kode: kode, nama: nama, jenisId: jenisId))).id;
-    await db.enqueue('akuns', id.toString(), 'insert', jsonEncode({"id": id, "kode": kode, "nama": nama, "jenis_id": jenisId}));
+    final cleanKode = InputSanitizer.sanitizeText(kode) ?? kode;
+    final cleanNama = InputSanitizer.sanitizeText(nama) ?? nama;
+    final id = (await db.into(db.akuns).insertReturning(AkunsCompanion.insert(kode: cleanKode, nama: cleanNama, jenisId: jenisId))).id;
+    await db.enqueue('akuns', id.toString(), 'insert', jsonEncode({"id": id, "kode": cleanKode, "nama": cleanNama, "jenis_id": jenisId}));
     return id;
   }
   @override
   Future<void> update(int id, {String? kode, String? nama, int? jenisId}) async {
+    final cleanKode = kode != null ? InputSanitizer.sanitizeText(kode) : null;
+    final cleanNama = nama != null ? InputSanitizer.sanitizeText(nama) : null;
     await (db.update(db.akuns)..where((t) => t.id.equals(id))).write(AkunsCompanion(
-      kode: kode != null ? Value(kode) : const Value.absent(),
-      nama: nama != null ? Value(nama) : const Value.absent(),
+      kode: cleanKode != null ? Value(cleanKode) : const Value.absent(),
+      nama: cleanNama != null ? Value(cleanNama) : const Value.absent(),
       jenisId: jenisId != null ? Value(jenisId) : const Value.absent(),
       isSynced: const Value(false),
     ));
@@ -102,13 +115,15 @@ class JenisRepositoryImpl implements JenisRepository {
   Future<Jeni?> getById(int id) => (db.select(db.jenis)..where((t) => t.id.equals(id))).getSingleOrNull();
   @override
   Future<int> create({required String nama}) async {
-    final id = (await db.into(db.jenis).insertReturning(JenisCompanion.insert(nama: nama))).id;
-    await db.enqueue('jenis', id.toString(), 'insert', jsonEncode({"id": id, "nama": nama}));
+    final cleanNama = InputSanitizer.sanitizeText(nama) ?? nama;
+    final id = (await db.into(db.jenis).insertReturning(JenisCompanion.insert(nama: cleanNama))).id;
+    await db.enqueue('jenis', id.toString(), 'insert', jsonEncode({"id": id, "nama": cleanNama}));
     return id;
   }
   @override
   Future<void> update(int id, {String? nama}) async {
-    await (db.update(db.jenis)..where((t) => t.id.equals(id))).write(JenisCompanion(nama: nama != null ? Value(nama) : const Value.absent(), isSynced: const Value(false)));
+    final cleanNama = nama != null ? InputSanitizer.sanitizeText(nama) : null;
+    await (db.update(db.jenis)..where((t) => t.id.equals(id))).write(JenisCompanion(nama: cleanNama != null ? Value(cleanNama) : const Value.absent(), isSynced: const Value(false)));
     await db.enqueue('jenis', id.toString(), 'update', '{"id":"$id"}');
   }
   @override
@@ -127,14 +142,16 @@ class RoleRepositoryImpl implements RoleRepository {
   Future<Role?> getById(int id) => (db.select(db.roles)..where((t) => t.id.equals(id))).getSingleOrNull();
   @override
   Future<int> create({required String nama}) async {
-    final id = (await db.into(db.roles).insertReturning(RolesCompanion.insert(nama: nama))).id;
-    await db.enqueue('roles', id.toString(), 'insert', jsonEncode({"id": id, "nama": nama}));
+    final cleanNama = InputSanitizer.sanitizeText(nama) ?? nama;
+    final id = (await db.into(db.roles).insertReturning(RolesCompanion.insert(nama: cleanNama))).id;
+    await db.enqueue('roles', id.toString(), 'insert', jsonEncode({"id": id, "nama": cleanNama}));
     return id;
   }
   @override
   Future<void> update(int id, {String? nama}) async {
+    final cleanNama = nama != null ? InputSanitizer.sanitizeText(nama) : null;
     await (db.update(db.roles)..where((t) => t.id.equals(id))).write(RolesCompanion(
-      nama: nama != null ? Value(nama) : const Value.absent(),
+      nama: cleanNama != null ? Value(cleanNama) : const Value.absent(),
       isSynced: const Value(false),
     ));
     await db.enqueue('roles', id.toString(), 'update', '{"id":"$id"}');

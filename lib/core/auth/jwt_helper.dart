@@ -60,15 +60,4 @@ class JwtHelper {
     const fakeSig = "fake_signature";
     return "$header.$payload.$fakeSig";
   }
-
-  // generate JWT signed dengan secret BE (biar BE accept)
-  static String generateSignedJwt({required int expUnixSeconds, String secret = 'keuskupan-dev-secret-ganti-di-prod', Map<String, dynamic>? extra}) {
-    final header = base64Url.encode(utf8.encode(jsonEncode({"alg": "HS256", "typ": "JWT"}))).replaceAll('=', '');
-    final payloadMap = {"sub": "test-user", "user_id": "test-user", "email": "test@keuskupan.test", "exp": expUnixSeconds, "iss": "keuskupan-be", ...?extra};
-    final payload = base64Url.encode(utf8.encode(jsonEncode(payloadMap))).replaceAll('=', '');
-    final data = '$header.$payload';
-    final hmac = Hmac(sha256, utf8.encode(secret));
-    final sig = base64Url.encode(hmac.convert(utf8.encode(data)).bytes).replaceAll('=', '');
-    return '$data.$sig';
-  }
 }
