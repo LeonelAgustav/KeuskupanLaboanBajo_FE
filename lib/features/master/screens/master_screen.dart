@@ -36,7 +36,7 @@ class _MasterScreenState extends State<MasterScreen> with SingleTickerProviderSt
     final isAdmin = widget.role == 'ADMIN' || isSuper;
     final tabs = <Tab>[const Tab(text: 'Keuskupan'), const Tab(text: 'Paroki'), const Tab(text: 'Kategori'), const Tab(text: 'Akun'), if (isSuper) const Tab(text: 'Role'), if (isAdmin) const Tab(text: 'Pengguna')];
     final views = <Widget>[_KeuskupanTab(db: widget.db), _ParokiTab(db: widget.db), _KategoriTab(db: widget.db), _AkunTab(db: widget.db), if (isSuper) _RoleTab(db: widget.db), if (isAdmin) _UserTab(db: widget.db, currentRole: widget.role)];
-    return Scaffold(appBar: AppBar(title: const Text('Kelola Data'), bottom: TabBar(controller: _tab, isScrollable: true, tabs: tabs)), body: TabBarView(controller: _tab, children: views));
+    return Scaffold(appBar: AppBar(title: const Text('Kelola Data'), bottom: TabBar(controller: _tab, isScrollable: true, tabAlignment: TabAlignment.start, padding: EdgeInsets.zero, labelPadding: const EdgeInsets.symmetric(horizontal: 16), tabs: tabs)), body: TabBarView(controller: _tab, children: views));
   }
 }
 
@@ -211,28 +211,27 @@ class __UserTabState extends State<_UserTab> {
     setState(() => loading = true);
     try {
       final localRoles = await widget.db.select(widget.db.roles).get();
-      final localUsers = await widget.db.select(widget.db.users).get();
+      final localUsers = await (widget.db.select(widget.db.users)..where((t) => t.deletedAt.isNull())).get();
       final localParokis = await widget.db.select(widget.db.parokis).get();
       parokis = localParokis.where((p) => p.deletedAt == null).toList();
       roles = localRoles.map((r) => {'id': r.id, 'nama': r.nama}).toList();
-      users = localUsers.map((u) => {'id': int.tryParse(u.id) ?? 0, 'nama': u.nama, 'email': u.email, 'role': null}).toList();
-      
-      // ponytail: langsung tampilkan data lokal, fetch server di background
+      users = localUsers.map((u) {
+        final rId = u.roleId;
+        final rObj = roles.cast<Map<String, dynamic>>().firstWhere(
+          (r) => r['id'] == rId,
+          orElse: () => {'id': rId, 'nama': rId != null ? '#$rId' : '-'},
+        );
+        return {
+          'id': int.tryParse(u.id) ?? 0,
+          'uuid': u.id,
+          'nama': u.nama,
+          'email': u.email,
+          'role_id': rId,
+          'paroki_id': u.parokiId,
+          'role': rObj,
+        };
+      }).toList();
       if (mounted) setState(() => loading = false);
-
-      final t = await _token().timeout(const Duration(seconds: 1), onTimeout: () => null);
-      if (t == null) return;
-      
-      final headers = {'Authorization': 'Bearer $t'};
-      // Fetch async agar tidak blok UI
-      Future.wait([
-        http.get(Uri.parse('${resolveApiUrl()}/api/v1/roles'), headers: headers).timeout(const Duration(seconds: 3)),
-        http.get(Uri.parse('${resolveApiUrl()}/api/v1/paroki'), headers: headers).timeout(const Duration(seconds: 3)),
-        http.get(Uri.parse('${resolveApiUrl()}/api/v1/users'), headers: headers).timeout(const Duration(seconds: 3)),
-      ]).then((results) async {
-        // ... (update data if successful)
-        // logic update SQLite dari server tetap jalan tapi tidak memblokir user
-      }).catchError((_) {});
     } catch (e) {
       if (mounted) setState(() => loading = false);
     }
@@ -272,30 +271,23 @@ class __UserTabState extends State<_UserTab> {
         return;
       }
       final pid = parokiId;
-      // offline-first: ALWAYS insert lokal dulu (source of truth), lalu enqueue
-      String? serverId;
+      // pure offline-first: insert lokal DULU (source of truth), enqueue sync_queue
+      final localId = DateTime.now().millisecondsSinceEpoch.toString();
       try {
-        final t = await _token();
-        final res = await http.post(Uri.parse('${resolveApiUrl()}/api/v1/auth/register'), headers: {'Content-Type': 'application/json', if (t != null) 'Authorization': 'Bearer $t'}, body: jsonEncode({'nama': nama.text, 'email': email.text, 'password': pass.text, if (roleId != null) 'role_id': roleId, if (pid != null && pid > 0) 'paroki_id': pid})).timeout(const Duration(seconds: 5));
-        if (res.statusCode == 200 || res.statusCode == 201) {
-          try {
-            final j = jsonDecode(res.body);
-            final idVal = (j['data'] as Map?)?['id'];
-            if (idVal != null) serverId = idVal.toString();
-          } catch (_) {}
-        }
-      } catch (_) {}
-      final localId = serverId ?? DateTime.now().millisecondsSinceEpoch.toString();
-      try {
-        await widget.db.into(widget.db.users).insert(UsersCompanion.insert(id: localId, nama: nama.text, email: email.text, isSynced: Value(serverId != null)));
-        if (serverId == null) {
-          await widget.db.enqueue('users', localId, 'insert', jsonEncode({'nama': nama.text, 'email': email.text, 'password': pass.text, if (roleId != null) 'role_id': roleId, if (pid != null && pid > 0) 'paroki_id': pid}));
-        }
+        await widget.db.into(widget.db.users).insert(UsersCompanion.insert(
+          id: localId,
+          nama: nama.text,
+          email: email.text,
+          roleId: Value(roleId),
+          parokiId: Value(pid),
+          isSynced: const Value(false),
+        ));
+        await widget.db.enqueue('users', localId, 'insert', jsonEncode({'nama': nama.text, 'email': email.text, 'password': pass.text, 'role_id': ?roleId, if (pid != null && pid > 0) 'paroki_id': pid}));
       } catch (_) {}
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(serverId != null ? 'Pengguna berhasil dibuat' : 'Pengguna disimpan lokal, sinkron saat online'),
-          backgroundColor: serverId != null ? Colors.green : Colors.orange,
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Pengguna disimpan lokal, akan disinkronkan saat online'),
+          backgroundColor: Colors.green,
         ));
       }
       _load();
@@ -338,26 +330,17 @@ class __UserTabState extends State<_UserTab> {
         return;
       }
       final id = u['id'] as int;
+      final uuid = u['uuid']?.toString() ?? id.toString();
       final pid = parokiId;
-      // offline-first: update lokal dulu, lalu kirim ke BE
+      // pure offline-first: update lokal dulu, enqueue sync
       try {
-        await widget.db.customStatement('UPDATE users SET nama = ?, email = ?, is_synced = 0 WHERE id = ?', [nama.text, email.text, id.toString()]);
-        await widget.db.enqueue('users', id.toString(), 'update', jsonEncode({'id': id, 'nama': nama.text, 'email': email.text, if (roleId != null) 'role_id': roleId, if (pid != null && pid > 0) 'paroki_id': pid, if (pass.text.isNotEmpty) 'password': pass.text}));
-      } catch (_) {}
-      var serverOk = false;
-      try {
-        final t = await _token();
-        final body = <String, dynamic>{'nama': nama.text, 'email': email.text, if (roleId != null) 'role_id': roleId, if (pid != null && pid > 0) 'paroki_id': pid, if (pass.text.isNotEmpty) 'password': pass.text};
-        final res = await http.put(Uri.parse('${resolveApiUrl()}/api/v1/users/$id'), headers: {'Content-Type': 'application/json', if (t != null) 'Authorization': 'Bearer $t'}, body: jsonEncode(body)).timeout(const Duration(seconds: 5));
-        serverOk = res.statusCode == 200;
-        if (serverOk) {
-          await widget.db.customStatement('UPDATE users SET is_synced = 1 WHERE id = ?', [id.toString()]);
-        }
+        await widget.db.customStatement('UPDATE users SET nama = ?, email = ?, role_id = ?, paroki_id = ?, is_synced = 0 WHERE id = ?', [nama.text, email.text, roleId, pid, uuid]);
+        await widget.db.enqueue('users', uuid, 'update', jsonEncode({'id': id, 'nama': nama.text, 'email': email.text, 'role_id': ?roleId, if (pid != null && pid > 0) 'paroki_id': pid, if (pass.text.isNotEmpty) 'password': pass.text}));
       } catch (_) {}
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(serverOk ? 'Pengguna diperbarui' : 'Pengguna diperbarui lokal, sinkron nanti'),
-          backgroundColor: serverOk ? Colors.green : Colors.orange,
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Pengguna diperbarui lokal, akan disinkronkan saat online'),
+          backgroundColor: Colors.green,
         ));
       }
       _load();
@@ -369,16 +352,47 @@ class __UserTabState extends State<_UserTab> {
       await widget.db.customStatement('UPDATE users SET deleted_at = ?, is_synced = 0 WHERE id = ?', [DateTime.now().millisecondsSinceEpoch, id.toString()]);
       await widget.db.enqueue('users', id.toString(), 'delete', jsonEncode({'id': id}));
     } catch (_) {}
-    try {
-      final t = await _token();
-      await http.delete(Uri.parse('${resolveApiUrl()}/api/v1/users/$id'), headers: t != null ? {'Authorization': 'Bearer $t'} : {}).timeout(const Duration(seconds: 5));
-    } catch (_) {}
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Pengguna dihapus lokal, akan disinkronkan saat online'),
+        backgroundColor: Colors.green,
+      ));
+    }
     _load();
   }
   @override
   Widget build(BuildContext context) {
     if (loading) return const Center(child: CircularProgressIndicator());
     final displayUsers = widget.currentRole == 'ADMIN' ? users.where((u) => (u['role']?['nama'] as String?) != 'SUPERADMIN' && u['email'] != 'superadmin@keuskupan.test').toList() : users;
-    return Column(children: [Padding(padding: const EdgeInsets.all(8), child: Row(children: [ElevatedButton.icon(icon: const Icon(Icons.person_add), label: const Text('Tambah Pengguna'), onPressed: _add), const SizedBox(width: 8), IconButton(icon: const Icon(Icons.refresh), onPressed: _load)] )), Expanded(child: displayUsers.isEmpty ? const Center(child: Text('Belum ada pengguna')) : ListView(children: displayUsers.map((u) => ListTile(leading: const Icon(Icons.person), title: Text(u['nama'] ?? '-'), subtitle: Text('${u['email'] ?? '-'} • ${u['role']?['nama'] ?? '-'}'), trailing: Row(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _editPengguna(u)), IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _delete(u['id'] as int))]))).toList()))]);
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8),
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.person_add),
+            label: const Text('Tambah Pengguna'),
+            onPressed: _add,
+          ),
+        ),
+        Expanded(
+          child: displayUsers.isEmpty 
+            ? const Center(child: Text('Belum ada pengguna')) 
+            : ListView(
+                children: displayUsers.map((u) => ListTile(
+                  leading: const Icon(Icons.person),
+                  title: Text(u['nama'] ?? '-'),
+                  subtitle: Text(u['role']?['nama'] ?? '-'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _editPengguna(u)),
+                      IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _delete(u['id'] as int)),
+                    ],
+                  ),
+                )).toList(),
+              ),
+        ),
+      ],
+    );
   }
 }

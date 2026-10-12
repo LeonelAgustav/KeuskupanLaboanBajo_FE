@@ -163,9 +163,11 @@ class SyncService {
         final m = u as Map<String, dynamic>;
         final id = (m['ID'] ?? m['id']);
         if (id == null) continue;
+        final roleId = m['RoleID'] ?? m['role_id'];
+        final parokiId = m['ParokiID'] ?? m['paroki_id'];
         await db.customStatement(
-            'INSERT OR REPLACE INTO users (id, nama, email, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, 1)',
-            [id.toString(), m['Nama'] ?? m['nama'] ?? '', m['Email'] ?? m['email'] ?? '', DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
+            'INSERT OR REPLACE INTO users (id, nama, email, role_id, paroki_id, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, ?, ?, 1)',
+            [id.toString(), m['Nama'] ?? m['nama'] ?? '', m['Email'] ?? m['email'] ?? '', roleId, parokiId, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
       }
       // ADMIN tidak boleh lihat SUPERADMIN bahkan di cache lokal lama
       try {

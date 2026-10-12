@@ -35,6 +35,26 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _roleIdMeta = const VerificationMeta('roleId');
+  @override
+  late final GeneratedColumn<int> roleId = GeneratedColumn<int>(
+    'role_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _parokiIdMeta = const VerificationMeta(
+    'parokiId',
+  );
+  @override
+  late final GeneratedColumn<int> parokiId = GeneratedColumn<int>(
+    'paroki_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -90,6 +110,8 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
     id,
     nama,
     email,
+    roleId,
+    parokiId,
     createdAt,
     updatedAt,
     deletedAt,
@@ -127,6 +149,18 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
       );
     } else if (isInserting) {
       context.missing(_emailMeta);
+    }
+    if (data.containsKey('role_id')) {
+      context.handle(
+        _roleIdMeta,
+        roleId.isAcceptableOrUnknown(data['role_id']!, _roleIdMeta),
+      );
+    }
+    if (data.containsKey('paroki_id')) {
+      context.handle(
+        _parokiIdMeta,
+        parokiId.isAcceptableOrUnknown(data['paroki_id']!, _parokiIdMeta),
+      );
     }
     if (data.containsKey('created_at')) {
       context.handle(
@@ -173,6 +207,14 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
         DriftSqlType.string,
         data['${effectivePrefix}email'],
       )!,
+      roleId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}role_id'],
+      ),
+      parokiId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}paroki_id'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -202,6 +244,8 @@ class User extends DataClass implements Insertable<User> {
   final String id;
   final String nama;
   final String email;
+  final int? roleId;
+  final int? parokiId;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
@@ -210,6 +254,8 @@ class User extends DataClass implements Insertable<User> {
     required this.id,
     required this.nama,
     required this.email,
+    this.roleId,
+    this.parokiId,
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,
@@ -221,6 +267,12 @@ class User extends DataClass implements Insertable<User> {
     map['id'] = Variable<String>(id);
     map['nama'] = Variable<String>(nama);
     map['email'] = Variable<String>(email);
+    if (!nullToAbsent || roleId != null) {
+      map['role_id'] = Variable<int>(roleId);
+    }
+    if (!nullToAbsent || parokiId != null) {
+      map['paroki_id'] = Variable<int>(parokiId);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     if (!nullToAbsent || deletedAt != null) {
@@ -235,6 +287,12 @@ class User extends DataClass implements Insertable<User> {
       id: Value(id),
       nama: Value(nama),
       email: Value(email),
+      roleId: roleId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(roleId),
+      parokiId: parokiId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parokiId),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       deletedAt: deletedAt == null && nullToAbsent
@@ -253,6 +311,8 @@ class User extends DataClass implements Insertable<User> {
       id: serializer.fromJson<String>(json['id']),
       nama: serializer.fromJson<String>(json['nama']),
       email: serializer.fromJson<String>(json['email']),
+      roleId: serializer.fromJson<int?>(json['roleId']),
+      parokiId: serializer.fromJson<int?>(json['parokiId']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
@@ -266,6 +326,8 @@ class User extends DataClass implements Insertable<User> {
       'id': serializer.toJson<String>(id),
       'nama': serializer.toJson<String>(nama),
       'email': serializer.toJson<String>(email),
+      'roleId': serializer.toJson<int?>(roleId),
+      'parokiId': serializer.toJson<int?>(parokiId),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'deletedAt': serializer.toJson<DateTime?>(deletedAt),
@@ -277,6 +339,8 @@ class User extends DataClass implements Insertable<User> {
     String? id,
     String? nama,
     String? email,
+    Value<int?> roleId = const Value.absent(),
+    Value<int?> parokiId = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
     Value<DateTime?> deletedAt = const Value.absent(),
@@ -285,6 +349,8 @@ class User extends DataClass implements Insertable<User> {
     id: id ?? this.id,
     nama: nama ?? this.nama,
     email: email ?? this.email,
+    roleId: roleId.present ? roleId.value : this.roleId,
+    parokiId: parokiId.present ? parokiId.value : this.parokiId,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
@@ -295,6 +361,8 @@ class User extends DataClass implements Insertable<User> {
       id: data.id.present ? data.id.value : this.id,
       nama: data.nama.present ? data.nama.value : this.nama,
       email: data.email.present ? data.email.value : this.email,
+      roleId: data.roleId.present ? data.roleId.value : this.roleId,
+      parokiId: data.parokiId.present ? data.parokiId.value : this.parokiId,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
@@ -308,6 +376,8 @@ class User extends DataClass implements Insertable<User> {
           ..write('id: $id, ')
           ..write('nama: $nama, ')
           ..write('email: $email, ')
+          ..write('roleId: $roleId, ')
+          ..write('parokiId: $parokiId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
@@ -317,8 +387,17 @@ class User extends DataClass implements Insertable<User> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, nama, email, createdAt, updatedAt, deletedAt, isSynced);
+  int get hashCode => Object.hash(
+    id,
+    nama,
+    email,
+    roleId,
+    parokiId,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    isSynced,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -326,6 +405,8 @@ class User extends DataClass implements Insertable<User> {
           other.id == this.id &&
           other.nama == this.nama &&
           other.email == this.email &&
+          other.roleId == this.roleId &&
+          other.parokiId == this.parokiId &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.deletedAt == this.deletedAt &&
@@ -336,6 +417,8 @@ class UsersCompanion extends UpdateCompanion<User> {
   final Value<String> id;
   final Value<String> nama;
   final Value<String> email;
+  final Value<int?> roleId;
+  final Value<int?> parokiId;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
@@ -345,6 +428,8 @@ class UsersCompanion extends UpdateCompanion<User> {
     this.id = const Value.absent(),
     this.nama = const Value.absent(),
     this.email = const Value.absent(),
+    this.roleId = const Value.absent(),
+    this.parokiId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
@@ -355,6 +440,8 @@ class UsersCompanion extends UpdateCompanion<User> {
     required String id,
     required String nama,
     required String email,
+    this.roleId = const Value.absent(),
+    this.parokiId = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
@@ -367,6 +454,8 @@ class UsersCompanion extends UpdateCompanion<User> {
     Expression<String>? id,
     Expression<String>? nama,
     Expression<String>? email,
+    Expression<int>? roleId,
+    Expression<int>? parokiId,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
@@ -377,6 +466,8 @@ class UsersCompanion extends UpdateCompanion<User> {
       if (id != null) 'id': id,
       if (nama != null) 'nama': nama,
       if (email != null) 'email': email,
+      if (roleId != null) 'role_id': roleId,
+      if (parokiId != null) 'paroki_id': parokiId,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
@@ -389,6 +480,8 @@ class UsersCompanion extends UpdateCompanion<User> {
     Value<String>? id,
     Value<String>? nama,
     Value<String>? email,
+    Value<int?>? roleId,
+    Value<int?>? parokiId,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
@@ -399,6 +492,8 @@ class UsersCompanion extends UpdateCompanion<User> {
       id: id ?? this.id,
       nama: nama ?? this.nama,
       email: email ?? this.email,
+      roleId: roleId ?? this.roleId,
+      parokiId: parokiId ?? this.parokiId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
@@ -418,6 +513,12 @@ class UsersCompanion extends UpdateCompanion<User> {
     }
     if (email.present) {
       map['email'] = Variable<String>(email.value);
+    }
+    if (roleId.present) {
+      map['role_id'] = Variable<int>(roleId.value);
+    }
+    if (parokiId.present) {
+      map['paroki_id'] = Variable<int>(parokiId.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
@@ -443,6 +544,8 @@ class UsersCompanion extends UpdateCompanion<User> {
           ..write('id: $id, ')
           ..write('nama: $nama, ')
           ..write('email: $email, ')
+          ..write('roleId: $roleId, ')
+          ..write('parokiId: $parokiId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
@@ -4678,6 +4781,8 @@ typedef $$UsersTableCreateCompanionBuilder =
       required String id,
       required String nama,
       required String email,
+      Value<int?> roleId,
+      Value<int?> parokiId,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
@@ -4689,6 +4794,8 @@ typedef $$UsersTableUpdateCompanionBuilder =
       Value<String> id,
       Value<String> nama,
       Value<String> email,
+      Value<int?> roleId,
+      Value<int?> parokiId,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
@@ -4716,6 +4823,16 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
 
   ColumnFilters<String> get email => $composableBuilder(
     column: $table.email,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get roleId => $composableBuilder(
+    column: $table.roleId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get parokiId => $composableBuilder(
+    column: $table.parokiId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4764,6 +4881,16 @@ class $$UsersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get roleId => $composableBuilder(
+    column: $table.roleId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get parokiId => $composableBuilder(
+    column: $table.parokiId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -4802,6 +4929,12 @@ class $$UsersTableAnnotationComposer
 
   GeneratedColumn<String> get email =>
       $composableBuilder(column: $table.email, builder: (column) => column);
+
+  GeneratedColumn<int> get roleId =>
+      $composableBuilder(column: $table.roleId, builder: (column) => column);
+
+  GeneratedColumn<int> get parokiId =>
+      $composableBuilder(column: $table.parokiId, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -4847,6 +4980,8 @@ class $$UsersTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<String> nama = const Value.absent(),
                 Value<String> email = const Value.absent(),
+                Value<int?> roleId = const Value.absent(),
+                Value<int?> parokiId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
@@ -4856,6 +4991,8 @@ class $$UsersTableTableManager
                 id: id,
                 nama: nama,
                 email: email,
+                roleId: roleId,
+                parokiId: parokiId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
@@ -4867,6 +5004,8 @@ class $$UsersTableTableManager
                 required String id,
                 required String nama,
                 required String email,
+                Value<int?> roleId = const Value.absent(),
+                Value<int?> parokiId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
@@ -4876,6 +5015,8 @@ class $$UsersTableTableManager
                 id: id,
                 nama: nama,
                 email: email,
+                roleId: roleId,
+                parokiId: parokiId,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,

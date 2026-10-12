@@ -135,14 +135,16 @@ class _HomeTabsState extends State<HomeTabs> with WidgetsBindingObserver {
   }
 
   Future<void> _doInitialSync() async {
-    // ponytail: dashboard jangan tunggu sync, tampil dulu baru sync background
+    // ponytail: dashboard langsung tampil seketika (offline-first), sync di latar belakang
     if (mounted) setState(() => _initialSyncDone = true);
     if (!await _conn.isOnline) {
       if (mounted) setState(() => _syncLog = 'Offline mode - data lokal');
       return;
     }
-    final ok = await _sync.trySync().timeout(const Duration(seconds: 8), onTimeout: () => false);
-    if (mounted) setState(() => _syncLog = ok ? 'Auto-pull OK' : 'Auto-pull gagal (offline mode)');
+    // Tanpa timeout kaku, biarkan berjalan asinkron di background
+    _sync.trySync().then((ok) {
+      if (mounted) setState(() => _syncLog = ok ? 'Sinkronisasi berhasil' : 'Sync gagal');
+    });
   }
 
   @override

@@ -17,6 +17,8 @@ class Users extends Table {
   TextColumn get id => text()(); // UUID
   TextColumn get nama => text()();
   TextColumn get email => text()();
+  IntColumn get roleId => integer().nullable()();
+  IntColumn get parokiId => integer().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get deletedAt => dateTime().nullable()();
@@ -154,7 +156,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -181,6 +183,10 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(jurnals, jurnals.deletedBy);
             await m.addColumn(detilJurnals, detilJurnals.updatedBy);
             await m.addColumn(detilJurnals, detilJurnals.deletedBy);
+          }
+          if (from < 6) {
+            await m.addColumn(users, users.roleId);
+            await m.addColumn(users, users.parokiId);
           }
         },
         beforeOpen: (details) async {

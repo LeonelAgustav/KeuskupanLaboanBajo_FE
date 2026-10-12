@@ -59,6 +59,12 @@ class JurnalCubit extends Cubit<JurnalState> {
 
   Future<void> deleteJurnal(String id) async {
     await jurnalRepo.delete(id);
+    final current = state;
+    if (current is JurnalLoaded) {
+      final updatedJurnals = current.jurnals.where((j) => j.id != id).toList();
+      final updatedDetils = Map<String, List<DetilJurnal>>.from(current.detils)..remove(id);
+      emit(JurnalLoaded(updatedJurnals, updatedDetils, current.pending, current.conflicts));
+    }
     await load();
   }
 
