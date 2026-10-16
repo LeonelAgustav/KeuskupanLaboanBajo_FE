@@ -56,7 +56,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Keuskupan Labuan Bajo',
+      title: 'Jurnal Keuangan Keuskupan',
       theme: appTheme,
       home: AuthGate(db: db),
     );
@@ -188,7 +188,7 @@ class _HomeTabsState extends State<HomeTabs> with WidgetsBindingObserver {
         }
         return Scaffold(body: pages[_idx], bottomNavigationBar: NavigationBar(selectedIndex: _idx, onDestinationSelected: (i) => setState(() => _idx = i), destinations: barDests));
       }),
-      if (!_initialSyncDone) Container(color: Colors.white, child: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Container(width: 96, height: 96, decoration: const BoxDecoration(shape: BoxShape.circle, color: ungu), child: const Icon(Icons.church, color: Colors.white, size: 48)), const SizedBox(height: 24), const Text('Keuskupan Labuan Bajo', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: darkText)), const SizedBox(height: 16), const CircularProgressIndicator(), const SizedBox(height: 12), Text(_syncLog.isEmpty ? 'Memuat data...' : _syncLog, style: const TextStyle(color: Colors.grey, fontSize: 13))]))),
+      if (!_initialSyncDone) Container(color: Colors.white, child: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [SizedBox(width: 96, height: 96, child: Image.asset('assets/icons/logo_1024.png', fit: BoxFit.contain)), const SizedBox(height: 24), const Text('Jurnal Keuangan Keuskupan', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: darkText)), const SizedBox(height: 16), const CircularProgressIndicator(), const SizedBox(height: 12), Text(_syncLog.isEmpty ? 'Memuat data...' : _syncLog, style: const TextStyle(color: Colors.grey, fontSize: 13))]))),
     ]);
   }
 }

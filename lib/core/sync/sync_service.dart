@@ -112,62 +112,77 @@ class SyncService {
       debugPrint('SYNC PULL: ${kList.length} keuskupans');
       for (final k in kList) {
         final m = k as Map<String, dynamic>;
-        final id = (m['ID'] ?? m['id']);
-        if (id == null) continue;
-        await db.customStatement(
-            'INSERT OR REPLACE INTO keuskupans (id, nama, alamat, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, 1)',
-            [id, m['Nama'] ?? m['nama'] ?? '', m['Alamat'] ?? m['alamat'] ?? '', DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
+        final uuid = (m['UUID'] ?? m['uuid']);
+        if (uuid == null) continue;
+        await db.into(db.keuskupans).insertOnConflictUpdate(KeuskupansCompanion(
+          uuid: Value(uuid),
+          id: Value(m['ID'] ?? m['id']),
+          nama: Value(m['Nama'] ?? m['nama'] ?? ''),
+          alamat: Value(m['Alamat'] ?? m['alamat'] ?? ''),
+        ));
       }
       for (final p in (body['parokis'] as List? ?? [])) {
         final m = p as Map<String, dynamic>;
-        final id = (m['ID'] ?? m['id']);
-        if (id == null) continue;
+        final uuid = (m['UUID'] ?? m['uuid']);
+        if (uuid == null) continue;
         final nama = m['Nama'] ?? m['nama'] ?? '';
-        // ponytail: dedupe by nama, server ID wins
-        await db.customStatement('DELETE FROM parokis WHERE nama = ? AND id != ?', [nama, id]);
-        await db.customStatement(
-            'INSERT OR REPLACE INTO parokis (id, nama, alamat, keuskupan_id, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, ?, 1)',
-            [id, nama, m['Alamat'] ?? m['alamat'] ?? '', m['KeuskupanID'] ?? m['keuskupan_id'] ?? 0, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
+        await db.into(db.parokis).insertOnConflictUpdate(ParokisCompanion(
+          uuid: Value(uuid),
+          id: Value(m['ID'] ?? m['id']),
+          nama: Value(nama),
+          alamat: Value(m['Alamat'] ?? m['alamat'] ?? ''),
+          keuskupanId: Value(m['KeuskupanID'] ?? m['keuskupan_id'] ?? 0),
+        ));
       }
       for (final jn in (body['jenis'] as List? ?? [])) {
         final m = jn as Map<String, dynamic>;
-        final id = (m['ID'] ?? m['id']);
-        if (id == null) continue;
+        final uuid = (m['UUID'] ?? m['uuid']);
+        if (uuid == null) continue;
         final nama = m['Nama'] ?? m['nama'] ?? '';
-        await db.customStatement('DELETE FROM jenis WHERE nama = ? AND id != ?', [nama, id]);
-        await db.customStatement('INSERT OR REPLACE INTO jenis (id, nama, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, 1)',
-            [id, nama, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
+        await db.into(db.jenis).insertOnConflictUpdate(JenisCompanion(
+          uuid: Value(uuid),
+          id: Value(m['ID'] ?? m['id']),
+          nama: Value(nama),
+        ));
       }
       for (final a in (body['akuns'] as List? ?? [])) {
         final m = a as Map<String, dynamic>;
-        final id = (m['ID'] ?? m['id']);
-        if (id == null) continue;
+        final uuid = (m['UUID'] ?? m['uuid']);
+        if (uuid == null) continue;
         final kode = m['Kode'] ?? m['kode'] ?? '';
-        // ponytail: dedupe by kode (unique business key), server ID wins
-        await db.customStatement('DELETE FROM akuns WHERE kode = ? AND id != ?', [kode, id]);
-        await db.customStatement(
-            'INSERT OR REPLACE INTO akuns (id, kode, nama, jenis_id, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, ?, 1)',
-            [id, kode, m['Nama'] ?? m['nama'] ?? '', m['JenisID'] ?? m['jenis_id'] ?? 0, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
+        await db.into(db.akuns).insertOnConflictUpdate(AkunsCompanion(
+          uuid: Value(uuid),
+          id: Value(m['ID'] ?? m['id']),
+          kode: Value(kode),
+          nama: Value(m['Nama'] ?? m['nama'] ?? ''),
+          jenisId: Value(m['JenisID'] ?? m['jenis_id'] ?? 0),
+        ));
       }
       for (final r in (body['roles'] as List? ?? [])) {
         final m = r as Map<String, dynamic>;
-        final id = (m['ID'] ?? m['id']);
-        if (id == null) continue;
+        final uuid = (m['UUID'] ?? m['uuid']);
+        if (uuid == null) continue;
         final nama = m['Nama'] ?? m['nama'] ?? '';
-        await db.customStatement('DELETE FROM roles WHERE nama = ? AND id != ?', [nama, id]);
-        await db.customStatement(
-            'INSERT OR REPLACE INTO roles (id, nama, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, 1)',
-            [id, nama, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
+        await db.into(db.roles).insertOnConflictUpdate(RolesCompanion(
+          uuid: Value(uuid),
+          id: Value(m['ID'] ?? m['id']),
+          nama: Value(nama),
+        ));
       }
       for (final u in (body['users'] as List? ?? [])) {
         final m = u as Map<String, dynamic>;
-        final id = (m['ID'] ?? m['id']);
-        if (id == null) continue;
+        final uuid = (m['UUID'] ?? m['uuid']);
+        if (uuid == null) continue;
         final roleId = m['RoleID'] ?? m['role_id'];
         final parokiId = m['ParokiID'] ?? m['paroki_id'];
-        await db.customStatement(
-            'INSERT OR REPLACE INTO users (id, nama, email, role_id, paroki_id, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, ?, ?, 1)',
-            [id.toString(), m['Nama'] ?? m['nama'] ?? '', m['Email'] ?? m['email'] ?? '', roleId, parokiId, DateTime.now().millisecondsSinceEpoch, DateTime.now().millisecondsSinceEpoch]);
+        await db.into(db.users).insertOnConflictUpdate(UsersCompanion(
+          uuid: Value(uuid),
+          id: Value(m['ID'] ?? m['id']),
+          nama: Value(m['Nama'] ?? m['nama'] ?? ''),
+          email: Value(m['Email'] ?? m['email'] ?? ''),
+          roleId: Value(roleId),
+          parokiId: Value(parokiId),
+        ));
       }
       // ADMIN tidak boleh lihat SUPERADMIN bahkan di cache lokal lama
       try {

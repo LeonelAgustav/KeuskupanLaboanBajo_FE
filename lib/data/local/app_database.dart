@@ -40,7 +40,8 @@ class Keuskupans extends Table {
 }
 
 class Parokis extends Table {
-  IntColumn get id => integer().autoIncrement()();
+  TextColumn get uuid => text().withLength(min: 36, max: 36)();
+  IntColumn get id => integer().nullable()();
   TextColumn get nama => text()();
   TextColumn get alamat => text()();
   IntColumn get keuskupanId => integer().customConstraint('REFERENCES keuskupans(id)')();
@@ -49,7 +50,7 @@ class Parokis extends Table {
   DateTimeColumn get deletedAt => dateTime().nullable()();
   BoolColumn get isSynced => boolean().withDefault(const Constant(false))(); // keterangan sudah terkirim - tambahan client
   @override
-  Set<Column> get primaryKey => {id};
+  Set<Column> get primaryKey => {uuid};
 }
 
 class Jenis extends Table {
@@ -156,12 +157,24 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async => await m.createAll(),
         onUpgrade: (m, from, to) async {
+          if (from < 8) {
+             await m.drop(users);
+             await m.drop(keuskupans);
+             await m.drop(jenis);
+             await m.drop(akuns);
+             await m.drop(roles);
+             await m.createTable(users);
+             await m.createTable(keuskupans);
+             await m.createTable(jenis);
+             await m.createTable(akuns);
+             await m.createTable(roles);
+          }
           if (from < 2) {
             // tanggal dari DateTime (int) jadi TEXT YYYY-MM-DD -> drop & recreate
             await m.deleteTable('jurnals');
@@ -187,6 +200,10 @@ class AppDatabase extends _$AppDatabase {
           if (from < 6) {
             await m.addColumn(users, users.roleId);
             await m.addColumn(users, users.parokiId);
+          }
+          if (from < 7) {
+            await m.drop(parokis);
+            await m.createTable(parokis);
           }
         },
         beforeOpen: (details) async {

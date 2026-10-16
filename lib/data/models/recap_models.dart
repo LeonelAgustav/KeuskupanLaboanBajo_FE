@@ -1,3 +1,5 @@
+library recap_models;
+
 /// Model classes for recap/report query results.
 /// These are plain Dart classes (not Drift tables) used to hold aggregated data.
 /// Backend uses debit/kredit; UI uses Pendapatan/Pengeluaran terminology.

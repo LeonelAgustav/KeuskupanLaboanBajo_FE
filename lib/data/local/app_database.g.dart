@@ -1002,18 +1002,27 @@ class $ParokisTable extends Parokis with TableInfo<$ParokisTable, Paroki> {
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $ParokisTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
+  @override
+  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
+    'uuid',
+    aliasedName,
+    false,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 36,
+      maxTextLength: 36,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<int> id = GeneratedColumn<int>(
     'id',
     aliasedName,
-    false,
-    hasAutoIncrement: true,
+    true,
     type: DriftSqlType.int,
     requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'PRIMARY KEY AUTOINCREMENT',
-    ),
   );
   static const VerificationMeta _namaMeta = const VerificationMeta('nama');
   @override
@@ -1097,6 +1106,7 @@ class $ParokisTable extends Parokis with TableInfo<$ParokisTable, Paroki> {
   );
   @override
   List<GeneratedColumn> get $columns => [
+    uuid,
     id,
     nama,
     alamat,
@@ -1118,6 +1128,14 @@ class $ParokisTable extends Parokis with TableInfo<$ParokisTable, Paroki> {
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
+    if (data.containsKey('uuid')) {
+      context.handle(
+        _uuidMeta,
+        uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_uuidMeta);
+    }
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     }
@@ -1176,15 +1194,19 @@ class $ParokisTable extends Parokis with TableInfo<$ParokisTable, Paroki> {
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {id};
+  Set<GeneratedColumn> get $primaryKey => {uuid};
   @override
   Paroki map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return Paroki(
+      uuid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uuid'],
+      )!,
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}id'],
-      )!,
+      ),
       nama: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}nama'],
@@ -1223,7 +1245,8 @@ class $ParokisTable extends Parokis with TableInfo<$ParokisTable, Paroki> {
 }
 
 class Paroki extends DataClass implements Insertable<Paroki> {
-  final int id;
+  final String uuid;
+  final int? id;
   final String nama;
   final String alamat;
   final int keuskupanId;
@@ -1232,7 +1255,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
   final DateTime? deletedAt;
   final bool isSynced;
   const Paroki({
-    required this.id,
+    required this.uuid,
+    this.id,
     required this.nama,
     required this.alamat,
     required this.keuskupanId,
@@ -1244,7 +1268,10 @@ class Paroki extends DataClass implements Insertable<Paroki> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<int>(id);
+    map['uuid'] = Variable<String>(uuid);
+    if (!nullToAbsent || id != null) {
+      map['id'] = Variable<int>(id);
+    }
     map['nama'] = Variable<String>(nama);
     map['alamat'] = Variable<String>(alamat);
     map['keuskupan_id'] = Variable<int>(keuskupanId);
@@ -1259,7 +1286,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
 
   ParokisCompanion toCompanion(bool nullToAbsent) {
     return ParokisCompanion(
-      id: Value(id),
+      uuid: Value(uuid),
+      id: id == null && nullToAbsent ? const Value.absent() : Value(id),
       nama: Value(nama),
       alamat: Value(alamat),
       keuskupanId: Value(keuskupanId),
@@ -1278,7 +1306,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Paroki(
-      id: serializer.fromJson<int>(json['id']),
+      uuid: serializer.fromJson<String>(json['uuid']),
+      id: serializer.fromJson<int?>(json['id']),
       nama: serializer.fromJson<String>(json['nama']),
       alamat: serializer.fromJson<String>(json['alamat']),
       keuskupanId: serializer.fromJson<int>(json['keuskupanId']),
@@ -1292,7 +1321,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<int>(id),
+      'uuid': serializer.toJson<String>(uuid),
+      'id': serializer.toJson<int?>(id),
       'nama': serializer.toJson<String>(nama),
       'alamat': serializer.toJson<String>(alamat),
       'keuskupanId': serializer.toJson<int>(keuskupanId),
@@ -1304,7 +1334,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
   }
 
   Paroki copyWith({
-    int? id,
+    String? uuid,
+    Value<int?> id = const Value.absent(),
     String? nama,
     String? alamat,
     int? keuskupanId,
@@ -1313,7 +1344,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
     Value<DateTime?> deletedAt = const Value.absent(),
     bool? isSynced,
   }) => Paroki(
-    id: id ?? this.id,
+    uuid: uuid ?? this.uuid,
+    id: id.present ? id.value : this.id,
     nama: nama ?? this.nama,
     alamat: alamat ?? this.alamat,
     keuskupanId: keuskupanId ?? this.keuskupanId,
@@ -1324,6 +1356,7 @@ class Paroki extends DataClass implements Insertable<Paroki> {
   );
   Paroki copyWithCompanion(ParokisCompanion data) {
     return Paroki(
+      uuid: data.uuid.present ? data.uuid.value : this.uuid,
       id: data.id.present ? data.id.value : this.id,
       nama: data.nama.present ? data.nama.value : this.nama,
       alamat: data.alamat.present ? data.alamat.value : this.alamat,
@@ -1340,6 +1373,7 @@ class Paroki extends DataClass implements Insertable<Paroki> {
   @override
   String toString() {
     return (StringBuffer('Paroki(')
+          ..write('uuid: $uuid, ')
           ..write('id: $id, ')
           ..write('nama: $nama, ')
           ..write('alamat: $alamat, ')
@@ -1354,6 +1388,7 @@ class Paroki extends DataClass implements Insertable<Paroki> {
 
   @override
   int get hashCode => Object.hash(
+    uuid,
     id,
     nama,
     alamat,
@@ -1367,6 +1402,7 @@ class Paroki extends DataClass implements Insertable<Paroki> {
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Paroki &&
+          other.uuid == this.uuid &&
           other.id == this.id &&
           other.nama == this.nama &&
           other.alamat == this.alamat &&
@@ -1378,7 +1414,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
 }
 
 class ParokisCompanion extends UpdateCompanion<Paroki> {
-  final Value<int> id;
+  final Value<String> uuid;
+  final Value<int?> id;
   final Value<String> nama;
   final Value<String> alamat;
   final Value<int> keuskupanId;
@@ -1386,7 +1423,9 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
   final Value<bool> isSynced;
+  final Value<int> rowid;
   const ParokisCompanion({
+    this.uuid = const Value.absent(),
     this.id = const Value.absent(),
     this.nama = const Value.absent(),
     this.alamat = const Value.absent(),
@@ -1395,8 +1434,10 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
     this.isSynced = const Value.absent(),
+    this.rowid = const Value.absent(),
   });
   ParokisCompanion.insert({
+    required String uuid,
     this.id = const Value.absent(),
     required String nama,
     required String alamat,
@@ -1405,10 +1446,13 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
     this.isSynced = const Value.absent(),
-  }) : nama = Value(nama),
+    this.rowid = const Value.absent(),
+  }) : uuid = Value(uuid),
+       nama = Value(nama),
        alamat = Value(alamat),
        keuskupanId = Value(keuskupanId);
   static Insertable<Paroki> custom({
+    Expression<String>? uuid,
     Expression<int>? id,
     Expression<String>? nama,
     Expression<String>? alamat,
@@ -1417,8 +1461,10 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
     Expression<bool>? isSynced,
+    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
+      if (uuid != null) 'uuid': uuid,
       if (id != null) 'id': id,
       if (nama != null) 'nama': nama,
       if (alamat != null) 'alamat': alamat,
@@ -1427,11 +1473,13 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
       if (isSynced != null) 'is_synced': isSynced,
+      if (rowid != null) 'rowid': rowid,
     });
   }
 
   ParokisCompanion copyWith({
-    Value<int>? id,
+    Value<String>? uuid,
+    Value<int?>? id,
     Value<String>? nama,
     Value<String>? alamat,
     Value<int>? keuskupanId,
@@ -1439,8 +1487,10 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
     Value<bool>? isSynced,
+    Value<int>? rowid,
   }) {
     return ParokisCompanion(
+      uuid: uuid ?? this.uuid,
       id: id ?? this.id,
       nama: nama ?? this.nama,
       alamat: alamat ?? this.alamat,
@@ -1449,12 +1499,16 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
       isSynced: isSynced ?? this.isSynced,
+      rowid: rowid ?? this.rowid,
     );
   }
 
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (uuid.present) {
+      map['uuid'] = Variable<String>(uuid.value);
+    }
     if (id.present) {
       map['id'] = Variable<int>(id.value);
     }
@@ -1479,12 +1533,16 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
     if (isSynced.present) {
       map['is_synced'] = Variable<bool>(isSynced.value);
     }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
     return map;
   }
 
   @override
   String toString() {
     return (StringBuffer('ParokisCompanion(')
+          ..write('uuid: $uuid, ')
           ..write('id: $id, ')
           ..write('nama: $nama, ')
           ..write('alamat: $alamat, ')
@@ -1492,7 +1550,8 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
-          ..write('isSynced: $isSynced')
+          ..write('isSynced: $isSynced, ')
+          ..write('rowid: $rowid')
           ..write(')'))
         .toString();
   }
@@ -5476,7 +5535,8 @@ typedef $$KeuskupansTableProcessedTableManager =
     >;
 typedef $$ParokisTableCreateCompanionBuilder =
     ParokisCompanion Function({
-      Value<int> id,
+      required String uuid,
+      Value<int?> id,
       required String nama,
       required String alamat,
       required int keuskupanId,
@@ -5484,10 +5544,12 @@ typedef $$ParokisTableCreateCompanionBuilder =
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
       Value<bool> isSynced,
+      Value<int> rowid,
     });
 typedef $$ParokisTableUpdateCompanionBuilder =
     ParokisCompanion Function({
-      Value<int> id,
+      Value<String> uuid,
+      Value<int?> id,
       Value<String> nama,
       Value<String> alamat,
       Value<int> keuskupanId,
@@ -5495,6 +5557,7 @@ typedef $$ParokisTableUpdateCompanionBuilder =
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
       Value<bool> isSynced,
+      Value<int> rowid,
     });
 
 final class $$ParokisTableReferences
@@ -5528,7 +5591,7 @@ final class $$ParokisTableReferences
     final manager = $$DetilJurnalsTableTableManager(
       $_db,
       $_db.detilJurnals,
-    ).filter((f) => f.parokiId.id.sqlEquals($_itemColumn<int>('id')!));
+    ).filter((f) => f.parokiId.id.sqlEquals($_itemColumn<int>('id')));
 
     final cache = $_typedResult.readTableOrNull(_detilJurnalsRefsTable($_db));
     return ProcessedTableManager(
@@ -5546,6 +5609,11 @@ class $$ParokisTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnFilters<String> get uuid => $composableBuilder(
+    column: $table.uuid,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
@@ -5639,6 +5707,11 @@ class $$ParokisTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnOrderings<String> get uuid => $composableBuilder(
+    column: $table.uuid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
@@ -5707,6 +5780,9 @@ class $$ParokisTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  GeneratedColumn<String> get uuid =>
+      $composableBuilder(column: $table.uuid, builder: (column) => column);
+
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
@@ -5805,7 +5881,8 @@ class $$ParokisTableTableManager
               $$ParokisTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                Value<String> uuid = const Value.absent(),
+                Value<int?> id = const Value.absent(),
                 Value<String> nama = const Value.absent(),
                 Value<String> alamat = const Value.absent(),
                 Value<int> keuskupanId = const Value.absent(),
@@ -5813,7 +5890,9 @@ class $$ParokisTableTableManager
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<bool> isSynced = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => ParokisCompanion(
+                uuid: uuid,
                 id: id,
                 nama: nama,
                 alamat: alamat,
@@ -5822,10 +5901,12 @@ class $$ParokisTableTableManager
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
                 isSynced: isSynced,
+                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                Value<int> id = const Value.absent(),
+                required String uuid,
+                Value<int?> id = const Value.absent(),
                 required String nama,
                 required String alamat,
                 required int keuskupanId,
@@ -5833,7 +5914,9 @@ class $$ParokisTableTableManager
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<bool> isSynced = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
               }) => ParokisCompanion.insert(
+                uuid: uuid,
                 id: id,
                 nama: nama,
                 alamat: alamat,
@@ -5842,6 +5925,7 @@ class $$ParokisTableTableManager
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
                 isSynced: isSynced,
+                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map(

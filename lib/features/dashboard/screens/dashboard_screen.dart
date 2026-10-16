@@ -77,7 +77,7 @@ class DashboardScreenState extends State<DashboardScreen> {
                 key: ValueKey('kpi$_refresh'),
                 future: _loadKpi(start, next),
                 builder: (c, snap) {
-                  final rows = snap.data as List?;
+                  final rows = snap.data;
                   final count = rows != null ? (rows[0] as QueryRow).data['c'] as int : 0;
                   final d = rows != null ? ((rows[1] as QueryRow).data['d'] as num).toDouble() : 0.0;
                   final k = rows != null ? ((rows[1] as QueryRow).data['k'] as num).toDouble() : 0.0;

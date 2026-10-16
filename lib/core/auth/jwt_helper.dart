@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:crypto/crypto.dart';
 
 // ponytail: decode JWT offline tanpa verify signature, cukup cek exp
 // pakai base64Url, tidak perlu package tambahan

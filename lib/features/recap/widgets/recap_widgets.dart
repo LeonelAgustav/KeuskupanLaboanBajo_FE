@@ -223,7 +223,7 @@ class ParokiRecapCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.church, color: ungu.withOpacity(0.6), size: 20),
+                   Icon(Icons.church, color: ungu.withValues(alpha: 0.6), size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(

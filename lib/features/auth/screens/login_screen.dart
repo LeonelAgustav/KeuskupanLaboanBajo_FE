@@ -94,16 +94,15 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               // Logo lingkaran gradient ungu→emas
               Center(
-                child: Container(
+                child: SizedBox(
                   width: 96,
                   height: 96,
-                  decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [ungu, emas])),
-                  child: const Icon(Icons.church, color: Colors.white, size: 48),
+                  child: Image.asset('assets/icons/logo_1024.png', fit: BoxFit.contain),
                 ),
               ),
               const SizedBox(height: 16),
               const Center(
-                child: Text('Keuskupan Labuan Bajo', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: darkText)),
+                child: Text('Jurnal Keuangan Keuskupan', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: darkText)),
               ),
               const SizedBox(height: 24),
               Card(

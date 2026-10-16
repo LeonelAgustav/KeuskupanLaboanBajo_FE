@@ -162,7 +162,8 @@ class _JurnalViewState extends State<_JurnalView> {
             child: BlocBuilder<JurnalCubit, JurnalState>(
               builder: (c, s) {
                 if (s is JurnalLoading) return const Center(child: CircularProgressIndicator());
-                if (s is JurnalError) return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                if (s is JurnalError) {
+                  return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
                   const Icon(Icons.error_outline, size: 48, color: dangerRed),
                   const SizedBox(height: 8),
                   Text('Gagal memuat data', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: textDark)),
@@ -170,6 +171,7 @@ class _JurnalViewState extends State<_JurnalView> {
                   const SizedBox(height: 16),
                   OutlinedButton.icon(icon: const Icon(Icons.refresh), label: const Text('Coba Lagi'), onPressed: () => cubit.load()),
                 ]));
+                }
                 if (s is JurnalLoaded) {
                   if (s.jurnals.isEmpty) {
                     return Center(child: Padding(padding: const EdgeInsets.all(32), child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -193,7 +195,7 @@ class _JurnalViewState extends State<_JurnalView> {
                   return ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 88),
                     itemCount: list.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (c, i) {
                       final j = list[i];
                       final detils = s.detils[j.id] ?? [];
