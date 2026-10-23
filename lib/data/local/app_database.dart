@@ -14,7 +14,8 @@ class DateToStringConverter extends TypeConverter<DateTime, String> {
 }
 
 class Users extends Table {
-  TextColumn get id => text()(); // UUID
+  TextColumn get id => text()();
+  TextColumn get uuid => text().nullable().withLength(min: 36, max: 36)();
   TextColumn get nama => text()();
   TextColumn get email => text()();
   IntColumn get roleId => integer().nullable()();
@@ -29,6 +30,7 @@ class Users extends Table {
 
 class Keuskupans extends Table {
   IntColumn get id => integer().autoIncrement()();
+  TextColumn get uuid => text().nullable().withLength(min: 36, max: 36)();
   TextColumn get nama => text()();
   TextColumn get alamat => text()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
@@ -40,8 +42,8 @@ class Keuskupans extends Table {
 }
 
 class Parokis extends Table {
-  TextColumn get uuid => text().withLength(min: 36, max: 36)();
-  IntColumn get id => integer().nullable()();
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get uuid => text().nullable().withLength(min: 36, max: 36)();
   TextColumn get nama => text()();
   TextColumn get alamat => text()();
   IntColumn get keuskupanId => integer().customConstraint('REFERENCES keuskupans(id)')();
@@ -50,11 +52,12 @@ class Parokis extends Table {
   DateTimeColumn get deletedAt => dateTime().nullable()();
   BoolColumn get isSynced => boolean().withDefault(const Constant(false))(); // keterangan sudah terkirim - tambahan client
   @override
-  Set<Column> get primaryKey => {uuid};
+  Set<Column> get primaryKey => {id};
 }
 
 class Jenis extends Table {
   IntColumn get id => integer().autoIncrement()();
+  TextColumn get uuid => text().nullable().withLength(min: 36, max: 36)();
   TextColumn get nama => text()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
@@ -66,6 +69,7 @@ class Jenis extends Table {
 
 class Akuns extends Table {
   IntColumn get id => integer().autoIncrement()();
+  TextColumn get uuid => text().nullable().withLength(min: 36, max: 36)();
   TextColumn get kode => text()();
   TextColumn get nama => text()();
   IntColumn get jenisId => integer().customConstraint('REFERENCES jenis(id)')();
@@ -83,6 +87,7 @@ class Jurnals extends Table {
   TextColumn get tanggal => text().map(const DateToStringConverter())(); // YYYY-MM-DD
   TextColumn get deskripsi => text().nullable()();
   TextColumn get noBukti => text().nullable()();
+  TextColumn get jenisPembatasan => text().withDefault(const Constant('Tanpa Pembatasan'))();
   IntColumn get createdBy => integer().nullable()();
   IntColumn get updatedBy => integer().nullable()();
   IntColumn get deletedBy => integer().nullable()();
@@ -99,6 +104,10 @@ class DetilJurnals extends Table {
   TextColumn get jurnalId => text().customConstraint('REFERENCES jurnals(id)')();
   IntColumn get akunId => integer().customConstraint('REFERENCES akuns(id)')();
   IntColumn get parokiId => integer().customConstraint('REFERENCES parokis(id)')();
+  IntColumn get akunDebitId => integer().nullable().customConstraint('REFERENCES akuns(id)')();
+  IntColumn get akunKreditId => integer().nullable().customConstraint('REFERENCES akuns(id)')();
+  RealColumn get jumlah => real().nullable().withDefault(const Constant(0))();
+  // shortcut: akunId/debit/kredit dibiarkan hidup untuk backward compat, drop setelah semua reader pindah ke akunDebitId/akunKreditId/jumlah
   RealColumn get debit => real().nullable().withDefault(const Constant(0))();
   RealColumn get kredit => real().nullable().withDefault(const Constant(0))();
   TextColumn get keterangan => text().nullable()();
@@ -157,12 +166,26 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async => await m.createAll(),
         onUpgrade: (m, from, to) async {
+          if (from < 12) {
+            await m.addColumn(jurnals, jurnals.jenisPembatasan);
+          }
+          if (from < 11) {
+            await m.addColumn(detilJurnals, detilJurnals.akunDebitId);
+            await m.addColumn(detilJurnals, detilJurnals.akunKreditId);
+            await m.addColumn(detilJurnals, detilJurnals.jumlah);
+          }
+          if (from < 9) {
+            await m.addColumn(users, users.uuid);
+            await m.addColumn(keuskupans, keuskupans.uuid);
+            await m.addColumn(jenis, jenis.uuid);
+            await m.addColumn(akuns, akuns.uuid);
+          }
           if (from < 8) {
              await m.drop(users);
              await m.drop(keuskupans);

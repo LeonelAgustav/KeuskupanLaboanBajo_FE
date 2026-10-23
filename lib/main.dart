@@ -1,26 +1,9 @@
-import 'package:drift/drift.dart' hide Column;
-import 'package:flutter/material.dart';
-import 'core/auth/jwt_helper.dart';
-import 'core/auth/token_storage.dart';
-import 'core/config/api_config.dart';
-import 'core/network/connectivity_service.dart';
-import 'core/sync/sync_service.dart';
-import 'core/theme.dart';
-import 'data/local/app_database.dart';
-import 'features/dashboard/screens/dashboard_screen.dart';
-import 'features/auth/screens/login_screen.dart';
-import 'features/jurnal/screens/jurnal_list_screen.dart';
-import 'features/recap/widgets/recap_widgets.dart';
-import 'features/master/screens/master_screen.dart';
-import 'features/recap/screens/recap_keuskupan_screen.dart';
-
-// ponytail: 1 codebase untuk app + website, responsive nav
 import 'dart:io';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'core/auth/jwt_helper.dart';
 import 'core/auth/token_storage.dart';
 import 'core/config/api_config.dart';
@@ -36,6 +19,7 @@ import 'features/recap/widgets/recap_widgets.dart';
 import 'features/master/screens/master_screen.dart';
 import 'features/recap/screens/recap_keuskupan_screen.dart';
 
+// ponytail: 1 codebase untuk app + website, responsive nav
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   AppDatabase db;
@@ -215,64 +199,11 @@ class _ProfilTab extends StatelessWidget {
                     ]))),
             const SizedBox(height: 12),
             SizedBox(width: double.infinity, child: FilledButton.icon(icon: const Icon(Icons.logout), label: const Text('Keluar'), style: FilledButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), onPressed: () async { await TokenStorage().clear(); await Future.delayed(const Duration(milliseconds: 100)); if (onLogout != null) onLogout!(); })),
-
+            const SizedBox(height: 24),
+            Center(child: Text('Dikembangkan Oleh Leonel • Gusti • Adit • Binus', style: TextStyle(fontSize: 12, color: Colors.grey[500], fontWeight: FontWeight.w400, letterSpacing: 0.3))),
           ]),
         ),
       ),
     );
   }
 }
-
-class _SettingsTab extends StatefulWidget {
-  final AppDatabase db;
-  final SyncService sync;
-  final TokenStorageI tokens;
-  const _SettingsTab({required this.db, required this.sync, required this.tokens});
-  @override
-  State<_SettingsTab> createState() => _SettingsTabState();
-}
-
-class _SettingsTabState extends State<_SettingsTab> {
-  String _status = '';
-  @override
-  void initState() {
-    super.initState();
-    _check();
-  }
-
-  Future<void> _check() async {
-    final hasAccess = await widget.tokens.hasValidAccessToken();
-    final pending = await widget.db.queueCount();
-    final online = await widget.sync.connectivity.isOnline;
-    setState(() => _status = 'online=$online pending=$pending accessValid=$hasAccess');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              ListTile(leading: const Icon(Icons.sync), title: const Text('Sync'), subtitle: Text(_status.isEmpty ? 'Otomatis saat online, retry 3x' : _status)),
-              const ListTile(leading: Icon(Icons.security), title: Text('Auth'), subtitle: Text('JWT access 1 tahun, cek offline')),
-              const ListTile(leading: Icon(Icons.storage), title: Text('Database'), subtitle: Text('drift SQLite (native) / IndexedDB+WASM (web)')),
-              const Divider(),
-              ElevatedButton.icon(icon: const Icon(Icons.sync), label: const Text('Sync Now'), onPressed: () async {
-                final ok = await widget.sync.trySync();
-                final msg = ok ? 'Sync berhasil' : 'Sync gagal: cek koneksi internet';
-                setState(() { _status = msg; });
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: ok ? Colors.green : Colors.red));
-                _check();
-              }),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-

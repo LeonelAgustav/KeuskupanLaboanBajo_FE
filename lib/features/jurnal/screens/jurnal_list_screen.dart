@@ -40,22 +40,12 @@ class _JurnalViewState extends State<_JurnalView> {
   static const _monthAbbr = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
   int _filter = 0; // 0 semua, 1 pending, 2 synced
   String? _monthFilter; // 'YYYY-MM'
-  String? _jenisFilter; // Pendapatan / Pengeluaran / Campuran
 
-  String? _jenisOf(List<DetilJurnal> detils) {
-    if (detils.isEmpty) return null;
-    final allKredit = detils.every((d) => (d.kredit ?? 0) > 0 && (d.debit ?? 0) == 0);
-    final allDebit = detils.every((d) => (d.debit ?? 0) > 0 && (d.kredit ?? 0) == 0);
-    if (allKredit) return 'Pendapatan';
-    if (allDebit) return 'Pengeluaran';
-    return 'Campuran';
-  }
-
-  bool _matches(Jurnal j, List<DetilJurnal> detils) {
+  // Filter jenis dihapus: format double-entry bikin semua jurnal "Campuran".
+  bool _matches(Jurnal j) {
     if (_filter == 1 && j.isSynced) return false;
     if (_filter == 2 && !j.isSynced) return false;
     if (_monthFilter != null && j.tanggal.toIso8601String().substring(0, 7) != _monthFilter) return false;
-    if (_jenisFilter != null && _jenisOf(detils) != _jenisFilter) return false;
     return true;
   }
 
@@ -103,7 +93,7 @@ class _JurnalViewState extends State<_JurnalView> {
       ),
       body: Column(
         children: [
-          // Filter status & jenis (Scrollable Chips)
+          // Filter status
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -113,16 +103,6 @@ class _JurnalViewState extends State<_JurnalView> {
               _FilterChip(label: 'Pending', selected: _filter == 1, onTap: () => setState(() => _filter = 1)),
               const SizedBox(width: 8),
               _FilterChip(label: 'Synced', selected: _filter == 2, onTap: () => setState(() => _filter = 2)),
-              const SizedBox(width: 16),
-              Container(width: 1, height: 20, color: Colors.grey[300]),
-              const SizedBox(width: 16),
-              _FilterChip(label: 'Semua Jenis', selected: _jenisFilter == null, onTap: () => setState(() => _jenisFilter = null)),
-              const SizedBox(width: 8),
-              _FilterChip(label: 'Pendapatan', selected: _jenisFilter == 'Pendapatan', onTap: () => setState(() => _jenisFilter = 'Pendapatan')),
-              const SizedBox(width: 8),
-              _FilterChip(label: 'Pengeluaran', selected: _jenisFilter == 'Pengeluaran', onTap: () => setState(() => _jenisFilter = 'Pengeluaran')),
-              const SizedBox(width: 8),
-              _FilterChip(label: 'Campuran', selected: _jenisFilter == 'Campuran', onTap: () => setState(() => _jenisFilter = 'Campuran')),
             ]),
           ),
           // Filter Periode / Bulan (Action Chip)
@@ -184,7 +164,7 @@ class _JurnalViewState extends State<_JurnalView> {
                       FilledButton.icon(onPressed: () => _openForm(context), icon: const Icon(Icons.add), label: const Text('Buat Jurnal')),
                     ])));
                   }
-                  final list = s.jurnals.where((j) => _matches(j, s.detils[j.id] ?? [])).toList();
+                  final list = s.jurnals.where((j) => _matches(j)).toList();
                   if (list.isEmpty) {
                     return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
                       const Icon(Icons.search_off, size: 48, color: abuHangat),
@@ -203,12 +183,18 @@ class _JurnalViewState extends State<_JurnalView> {
                       Color? jenisColor;
                       double totalNominal = 0;
                       if (detils.isNotEmpty) {
-                        final allKredit = detils.every((d) => (d.kredit ?? 0) > 0 && (d.debit ?? 0) == 0);
-                        final allDebit = detils.every((d) => (d.debit ?? 0) > 0 && (d.kredit ?? 0) == 0);
-                        for (final d in detils) { totalNominal += (d.kredit ?? 0) + (d.debit ?? 0); }
-                        if (allKredit) { jenisLabel = 'Pendapatan'; jenisColor = successGreen; }
-                        else if (allDebit) { jenisLabel = 'Pengeluaran'; jenisColor = merahPengeluaran; }
-                        else { jenisLabel = 'Campuran'; jenisColor = Colors.grey; }
+                        final hasNew = detils.any((d) => d.akunDebitId != null && d.akunKreditId != null);
+                        if (hasNew) {
+                          jenisLabel = 'Campuran'; jenisColor = Colors.grey;
+                          for (final d in detils) { totalNominal += d.jumlah ?? 0; }
+                        } else {
+                          final allKredit = detils.every((d) => (d.kredit ?? 0) > 0 && (d.debit ?? 0) == 0);
+                          final allDebit = detils.every((d) => (d.debit ?? 0) > 0 && (d.kredit ?? 0) == 0);
+                          for (final d in detils) { totalNominal += (d.kredit ?? 0) + (d.debit ?? 0); }
+                          if (allKredit) { jenisLabel = 'Pendapatan'; jenisColor = successGreen; }
+                          else if (allDebit) { jenisLabel = 'Pengeluaran'; jenisColor = merahPengeluaran; }
+                          else { jenisLabel = 'Campuran'; jenisColor = Colors.grey; }
+                        }
                       }
                       return Card(
                         elevation: 0.5,

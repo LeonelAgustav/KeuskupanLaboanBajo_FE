@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:uuid/uuid.dart';
 import 'package:drift/drift.dart';
 import '../../local/app_database.dart';
 import '../../../core/utils/sanitizer.dart';
@@ -11,31 +12,39 @@ class ParokiRepositoryImpl implements ParokiRepository {
   @override
   Future<List<Paroki>> getAll() => (db.select(db.parokis)..where((t) => t.deletedAt.isNull())).get();
   @override
-  Future<Paroki?> getById(int id) => (db.select(db.parokis)..where((t) => t.id.equals(id))).getSingleOrNull();
+  Future<Paroki?> getById(String uuid) => (db.select(db.parokis)..where((t) => t.uuid.equals(uuid))).getSingleOrNull();
   @override
-  Future<int> create({required String nama, required String alamat, required int keuskupanId}) async {
+  Future<Paroki?> create({required String nama, required String alamat, required int keuskupanId}) async {
     final cleanNama = InputSanitizer.sanitizeText(nama) ?? nama;
     final cleanAlamat = InputSanitizer.sanitizeText(alamat) ?? alamat;
-    final id = (await db.into(db.parokis).insertReturning(ParokisCompanion.insert(nama: cleanNama, alamat: cleanAlamat, keuskupanId: keuskupanId))).id;
-    await db.enqueue('parokis', id.toString(), 'insert', jsonEncode({"id": id, "nama": cleanNama, "alamat": cleanAlamat, "keuskupan_id": keuskupanId}));
-    return id;
+    final uuid = const Uuid().v4();
+    final localId = DateTime.now().millisecondsSinceEpoch & 0x7FFFFFFF;
+    final inserted = await (db.into(db.parokis).insertReturning(ParokisCompanion.insert(
+      uuid: Value(uuid),
+      id: Value(localId),
+      nama: cleanNama,
+      alamat: cleanAlamat,
+      keuskupanId: keuskupanId,
+    )));
+    await db.enqueue('parokis', uuid, 'insert', jsonEncode({"id": localId, "uuid": uuid, "nama": cleanNama, "alamat": cleanAlamat, "keuskupan_id": keuskupanId}));
+    return inserted;
   }
   @override
-  Future<void> update(int id, {String? nama, String? alamat, int? keuskupanId}) async {
+  Future<void> update(String uuid, {String? nama, String? alamat, int? keuskupanId}) async {
     final cleanNama = nama != null ? InputSanitizer.sanitizeText(nama) : null;
     final cleanAlamat = alamat != null ? InputSanitizer.sanitizeText(alamat) : null;
-    await (db.update(db.parokis)..where((t) => t.id.equals(id))).write(ParokisCompanion(
+    await (db.update(db.parokis)..where((t) => t.uuid.equals(uuid))).write(ParokisCompanion(
       nama: cleanNama != null ? Value(cleanNama) : const Value.absent(),
       alamat: cleanAlamat != null ? Value(cleanAlamat) : const Value.absent(),
       keuskupanId: keuskupanId != null ? Value(keuskupanId) : const Value.absent(),
       isSynced: const Value(false),
     ));
-    await db.enqueue('parokis', id.toString(), 'update', '{"id":"$id"}');
+    await db.enqueue('parokis', uuid, 'update', '{"uuid":"$uuid"}');
   }
   @override
-  Future<void> delete(int id) async {
-    await (db.update(db.parokis)..where((t) => t.id.equals(id))).write(ParokisCompanion(deletedAt: Value(DateTime.now()), isSynced: const Value(false)));
-    await db.enqueue('parokis', id.toString(), 'delete', '{"id":"$id"}');
+  Future<void> delete(String uuid) async {
+    await (db.update(db.parokis)..where((t) => t.uuid.equals(uuid))).write(ParokisCompanion(deletedAt: Value(DateTime.now()), isSynced: const Value(false)));
+    await db.enqueue('parokis', uuid, 'delete', '{"uuid":"$uuid"}');
   }
 }
 
@@ -50,8 +59,9 @@ class KeuskupanRepositoryImpl implements KeuskupanRepository {
   Future<int> create({required String nama, required String alamat}) async {
     final cleanNama = InputSanitizer.sanitizeText(nama) ?? nama;
     final cleanAlamat = InputSanitizer.sanitizeText(alamat) ?? alamat;
-    final id = (await db.into(db.keuskupans).insertReturning(KeuskupansCompanion.insert(nama: cleanNama, alamat: cleanAlamat))).id;
-    await db.enqueue('keuskupans', id.toString(), 'insert', jsonEncode({"id": id, "nama": cleanNama, "alamat": cleanAlamat}));
+    final uuid = const Uuid().v4();
+    final id = (await db.into(db.keuskupans).insertReturning(KeuskupansCompanion.insert(uuid: Value(uuid), nama: cleanNama, alamat: cleanAlamat))).id;
+    await db.enqueue('keuskupans', uuid, 'insert', jsonEncode({"id": id, "uuid": uuid, "nama": cleanNama, "alamat": cleanAlamat}));
     return id;
   }
   @override
@@ -83,8 +93,9 @@ class AkunRepositoryImpl implements AkunRepository {
   Future<int> create({required String kode, required String nama, required int jenisId}) async {
     final cleanKode = InputSanitizer.sanitizeText(kode) ?? kode;
     final cleanNama = InputSanitizer.sanitizeText(nama) ?? nama;
-    final id = (await db.into(db.akuns).insertReturning(AkunsCompanion.insert(kode: cleanKode, nama: cleanNama, jenisId: jenisId))).id;
-    await db.enqueue('akuns', id.toString(), 'insert', jsonEncode({"id": id, "kode": cleanKode, "nama": cleanNama, "jenis_id": jenisId}));
+    final uuid = const Uuid().v4();
+    final id = (await db.into(db.akuns).insertReturning(AkunsCompanion.insert(uuid: Value(uuid), kode: cleanKode, nama: cleanNama, jenisId: jenisId))).id;
+    await db.enqueue('akuns', uuid, 'insert', jsonEncode({"id": id, "uuid": uuid, "kode": cleanKode, "nama": cleanNama, "jenis_id": jenisId}));
     return id;
   }
   @override
@@ -116,8 +127,9 @@ class JenisRepositoryImpl implements JenisRepository {
   @override
   Future<int> create({required String nama}) async {
     final cleanNama = InputSanitizer.sanitizeText(nama) ?? nama;
-    final id = (await db.into(db.jenis).insertReturning(JenisCompanion.insert(nama: cleanNama))).id;
-    await db.enqueue('jenis', id.toString(), 'insert', jsonEncode({"id": id, "nama": cleanNama}));
+    final uuid = const Uuid().v4();
+    final id = (await db.into(db.jenis).insertReturning(JenisCompanion.insert(uuid: Value(uuid), nama: cleanNama))).id;
+    await db.enqueue('jenis', uuid, 'insert', jsonEncode({"id": id, "uuid": uuid, "nama": cleanNama}));
     return id;
   }
   @override

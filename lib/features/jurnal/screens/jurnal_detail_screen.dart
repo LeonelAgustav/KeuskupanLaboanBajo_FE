@@ -79,7 +79,10 @@ class _JurnalDetailScreenState extends State<JurnalDetailScreen> {
       deskripsi: j.deskripsi,
       detils: [
         for (final d in _detils)
-          JurnalPrefillDetil(akunId: d.akunId, parokiId: d.parokiId, nominal: (d.kredit ?? 0) > 0 ? d.kredit! : d.debit!),
+          if (d.akunDebitId != null && d.akunKreditId != null)
+            JurnalPrefillDetil(akunId: d.akunDebitId!, parokiId: d.parokiId, nominal: d.jumlah ?? 0)
+          else
+            JurnalPrefillDetil(akunId: d.akunId, parokiId: d.parokiId, nominal: (d.kredit ?? 0) > 0 ? d.kredit! : d.debit!),
       ],
     );
     if (!mounted) return;
@@ -155,6 +158,33 @@ if (_detils.isEmpty)
                               const Card(child: Padding(padding: EdgeInsets.all(24), child: Center(child: Text('Tidak ada detil', style: TextStyle(color: Colors.grey)))))
                             else
                               ..._detils.map((d) {
+                                // Format baru: 1 baris (akunDebitId+akunKreditId+jumlah terisi)
+                                if (d.akunDebitId != null && d.akunKreditId != null) {
+                                  final akunDebit = _akunMap[d.akunDebitId];
+                                  final akunKredit = _akunMap[d.akunKreditId];
+                                  final paroki = _parokiMap[d.parokiId];
+                                  final nominal = d.jumlah ?? 0;
+                                  return Card(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                        Row(children: [
+                                          Expanded(child: Text('D: ${akunDebit?.kode ?? '?'} - ${akunDebit?.nama ?? 'Akun tidak ditemukan'}', style: TextStyle(fontWeight: FontWeight.w600, color: akunDebit == null ? Colors.red : Colors.black), overflow: TextOverflow.ellipsis)),
+                                          const SizedBox(width: 8),
+                                          Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(formatRupiah(nominal), style: const TextStyle(color: merahPengeluaran, fontWeight: FontWeight.bold)))),
+                                        ]),
+                                        const SizedBox(height: 4),
+                                        Row(children: [
+                                          Expanded(child: Text('K: ${akunKredit?.kode ?? '?'} - ${akunKredit?.nama ?? 'Akun tidak ditemukan'}', style: TextStyle(fontWeight: FontWeight.w600, color: akunKredit == null ? Colors.red : Colors.black), overflow: TextOverflow.ellipsis)),
+                                        ]),
+                                        const SizedBox(height: 4),
+                                        Text('Paroki: ${paroki?.nama ?? 'Paroki tidak ditemukan'}', style: TextStyle(fontSize: 12, color: paroki == null ? Colors.red : Colors.grey)),
+                                        if (d.keterangan != null) Text('Ket: ${d.keterangan}', style: const TextStyle(fontSize: 12)),
+                                      ]),
+                                    ),
+                                  );
+                                }
                                 final akun = _akunMap[d.akunId];
                                 final paroki = _parokiMap[d.parokiId];
                                 final akunText = akun != null ? '${akun.kode} - ${akun.nama}' : 'Akun tidak ditemukan';

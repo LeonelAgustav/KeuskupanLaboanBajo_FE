@@ -8,9 +8,10 @@ abstract class JurnalRepository {
     required DateTime tanggal,
     String? deskripsi,
     String? noBukti,
+    String jenisPembatasan = 'Tanpa Pembatasan',
     List<DetilJurnalsCompanion> detils = const [],
   });
-  Future<void> update(String id, {int? keuskupanId, DateTime? tanggal, String? deskripsi, String? noBukti});
+  Future<void> update(String id, {int? keuskupanId, DateTime? tanggal, String? deskripsi, String? noBukti, String? jenisPembatasan});
   Future<void> delete(String id); // soft delete
   Future<int> pendingCount();
   Future<List<DetilJurnal>> getDetils(String jurnalId);

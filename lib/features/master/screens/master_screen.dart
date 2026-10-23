@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:uuid/uuid.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -91,12 +92,12 @@ class __ParokiTabState extends State<_ParokiTab> {
   Future<void> _edit(Paroki p) async {
     final nama = TextEditingController(text: p.nama); final alamat = TextEditingController(text: p.alamat); int? keId = p.keuskupanId;
     final ok = await showDialog<bool>(context: context, builder: (c) => StatefulBuilder(builder: (c, set) => AlertDialog(title: const Text('Edit Paroki'), content: Column(mainAxisSize: MainAxisSize.min, children: [DropdownButtonFormField<int>(initialValue: keId, items: keList.map((k) => DropdownMenuItem(value: k.id, child: Text(k.nama))).toList(), onChanged: (v) => set(() => keId = v), decoration: const InputDecoration(labelText: 'Keuskupan')), TextField(controller: nama, decoration: const InputDecoration(labelText: 'Nama')), TextField(controller: alamat, decoration: const InputDecoration(labelText: 'Alamat'))]), actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Batal')), ElevatedButton(onPressed: () => Navigator.pop(c, true), child: const Text('Simpan'))])));
-    if (ok == true && nama.text.isNotEmpty && keId != null) { await repo.update(p.id, nama: nama.text, alamat: alamat.text, keuskupanId: keId!); _load(); }
+    if (ok == true && nama.text.isNotEmpty && keId != null) { await repo.update(p.uuid ?? '', nama: nama.text, alamat: alamat.text, keuskupanId: keId!); _load(); }
   }
   @override
   Widget build(BuildContext context) {
     if (keList.isEmpty) return const Center(child: Text('Buat Keuskupan dulu'));
-    return Column(children: [Padding(padding: const EdgeInsets.all(8), child: ElevatedButton.icon(icon: const Icon(Icons.add), label: const Text('Tambah Paroki'), onPressed: _add)), Expanded(child: ListView(children: list.map((p) => ListTile(leading: const Icon(Icons.church), title: Text(p.nama), subtitle: Text(p.alamat), trailing: Row(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _edit(p)), IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () async { if (await confirmHapus(context, p.nama)) { await repo.delete(p.id); _load(); } })]))).toList()))]);
+    return Column(children: [Padding(padding: const EdgeInsets.all(8), child: ElevatedButton.icon(icon: const Icon(Icons.add), label: const Text('Tambah Paroki'), onPressed: _add)), Expanded(child: ListView(children: list.map((p) => ListTile(leading: const Icon(Icons.church), title: Text(p.nama), subtitle: Text(p.alamat), trailing: Row(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _edit(p)), IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () async { if (await confirmHapus(context, p.nama)) { await repo.delete(p.uuid ?? ''); _load(); } })]))).toList()))]);
   }
 }
 
@@ -272,10 +273,11 @@ class __UserTabState extends State<_UserTab> {
       }
       final pid = parokiId;
       // pure offline-first: insert lokal DULU (source of truth), enqueue sync_queue
-      final localId = DateTime.now().millisecondsSinceEpoch.toString();
+      final localId = const Uuid().v4();
       try {
         await widget.db.into(widget.db.users).insert(UsersCompanion.insert(
           id: localId,
+          uuid: Value(localId),
           nama: nama.text,
           email: email.text,
           roleId: Value(roleId),

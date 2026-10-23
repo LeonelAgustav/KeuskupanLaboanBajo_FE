@@ -17,6 +17,19 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
+  @override
+  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
+    'uuid',
+    aliasedName,
+    true,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 36,
+      maxTextLength: 36,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _namaMeta = const VerificationMeta('nama');
   @override
   late final GeneratedColumn<String> nama = GeneratedColumn<String>(
@@ -108,6 +121,7 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uuid,
     nama,
     email,
     roleId,
@@ -133,6 +147,12 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
       context.missing(_idMeta);
+    }
+    if (data.containsKey('uuid')) {
+      context.handle(
+        _uuidMeta,
+        uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
+      );
     }
     if (data.containsKey('nama')) {
       context.handle(
@@ -199,6 +219,10 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
         DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
+      uuid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uuid'],
+      ),
       nama: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}nama'],
@@ -242,6 +266,7 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
 
 class User extends DataClass implements Insertable<User> {
   final String id;
+  final String? uuid;
   final String nama;
   final String email;
   final int? roleId;
@@ -252,6 +277,7 @@ class User extends DataClass implements Insertable<User> {
   final bool isSynced;
   const User({
     required this.id,
+    this.uuid,
     required this.nama,
     required this.email,
     this.roleId,
@@ -265,6 +291,9 @@ class User extends DataClass implements Insertable<User> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
+    if (!nullToAbsent || uuid != null) {
+      map['uuid'] = Variable<String>(uuid);
+    }
     map['nama'] = Variable<String>(nama);
     map['email'] = Variable<String>(email);
     if (!nullToAbsent || roleId != null) {
@@ -285,6 +314,7 @@ class User extends DataClass implements Insertable<User> {
   UsersCompanion toCompanion(bool nullToAbsent) {
     return UsersCompanion(
       id: Value(id),
+      uuid: uuid == null && nullToAbsent ? const Value.absent() : Value(uuid),
       nama: Value(nama),
       email: Value(email),
       roleId: roleId == null && nullToAbsent
@@ -309,6 +339,7 @@ class User extends DataClass implements Insertable<User> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return User(
       id: serializer.fromJson<String>(json['id']),
+      uuid: serializer.fromJson<String?>(json['uuid']),
       nama: serializer.fromJson<String>(json['nama']),
       email: serializer.fromJson<String>(json['email']),
       roleId: serializer.fromJson<int?>(json['roleId']),
@@ -324,6 +355,7 @@ class User extends DataClass implements Insertable<User> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
+      'uuid': serializer.toJson<String?>(uuid),
       'nama': serializer.toJson<String>(nama),
       'email': serializer.toJson<String>(email),
       'roleId': serializer.toJson<int?>(roleId),
@@ -337,6 +369,7 @@ class User extends DataClass implements Insertable<User> {
 
   User copyWith({
     String? id,
+    Value<String?> uuid = const Value.absent(),
     String? nama,
     String? email,
     Value<int?> roleId = const Value.absent(),
@@ -347,6 +380,7 @@ class User extends DataClass implements Insertable<User> {
     bool? isSynced,
   }) => User(
     id: id ?? this.id,
+    uuid: uuid.present ? uuid.value : this.uuid,
     nama: nama ?? this.nama,
     email: email ?? this.email,
     roleId: roleId.present ? roleId.value : this.roleId,
@@ -359,6 +393,7 @@ class User extends DataClass implements Insertable<User> {
   User copyWithCompanion(UsersCompanion data) {
     return User(
       id: data.id.present ? data.id.value : this.id,
+      uuid: data.uuid.present ? data.uuid.value : this.uuid,
       nama: data.nama.present ? data.nama.value : this.nama,
       email: data.email.present ? data.email.value : this.email,
       roleId: data.roleId.present ? data.roleId.value : this.roleId,
@@ -374,6 +409,7 @@ class User extends DataClass implements Insertable<User> {
   String toString() {
     return (StringBuffer('User(')
           ..write('id: $id, ')
+          ..write('uuid: $uuid, ')
           ..write('nama: $nama, ')
           ..write('email: $email, ')
           ..write('roleId: $roleId, ')
@@ -389,6 +425,7 @@ class User extends DataClass implements Insertable<User> {
   @override
   int get hashCode => Object.hash(
     id,
+    uuid,
     nama,
     email,
     roleId,
@@ -403,6 +440,7 @@ class User extends DataClass implements Insertable<User> {
       identical(this, other) ||
       (other is User &&
           other.id == this.id &&
+          other.uuid == this.uuid &&
           other.nama == this.nama &&
           other.email == this.email &&
           other.roleId == this.roleId &&
@@ -415,6 +453,7 @@ class User extends DataClass implements Insertable<User> {
 
 class UsersCompanion extends UpdateCompanion<User> {
   final Value<String> id;
+  final Value<String?> uuid;
   final Value<String> nama;
   final Value<String> email;
   final Value<int?> roleId;
@@ -426,6 +465,7 @@ class UsersCompanion extends UpdateCompanion<User> {
   final Value<int> rowid;
   const UsersCompanion({
     this.id = const Value.absent(),
+    this.uuid = const Value.absent(),
     this.nama = const Value.absent(),
     this.email = const Value.absent(),
     this.roleId = const Value.absent(),
@@ -438,6 +478,7 @@ class UsersCompanion extends UpdateCompanion<User> {
   });
   UsersCompanion.insert({
     required String id,
+    this.uuid = const Value.absent(),
     required String nama,
     required String email,
     this.roleId = const Value.absent(),
@@ -452,6 +493,7 @@ class UsersCompanion extends UpdateCompanion<User> {
        email = Value(email);
   static Insertable<User> custom({
     Expression<String>? id,
+    Expression<String>? uuid,
     Expression<String>? nama,
     Expression<String>? email,
     Expression<int>? roleId,
@@ -464,6 +506,7 @@ class UsersCompanion extends UpdateCompanion<User> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uuid != null) 'uuid': uuid,
       if (nama != null) 'nama': nama,
       if (email != null) 'email': email,
       if (roleId != null) 'role_id': roleId,
@@ -478,6 +521,7 @@ class UsersCompanion extends UpdateCompanion<User> {
 
   UsersCompanion copyWith({
     Value<String>? id,
+    Value<String?>? uuid,
     Value<String>? nama,
     Value<String>? email,
     Value<int?>? roleId,
@@ -490,6 +534,7 @@ class UsersCompanion extends UpdateCompanion<User> {
   }) {
     return UsersCompanion(
       id: id ?? this.id,
+      uuid: uuid ?? this.uuid,
       nama: nama ?? this.nama,
       email: email ?? this.email,
       roleId: roleId ?? this.roleId,
@@ -507,6 +552,9 @@ class UsersCompanion extends UpdateCompanion<User> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<String>(id.value);
+    }
+    if (uuid.present) {
+      map['uuid'] = Variable<String>(uuid.value);
     }
     if (nama.present) {
       map['nama'] = Variable<String>(nama.value);
@@ -542,6 +590,7 @@ class UsersCompanion extends UpdateCompanion<User> {
   String toString() {
     return (StringBuffer('UsersCompanion(')
           ..write('id: $id, ')
+          ..write('uuid: $uuid, ')
           ..write('nama: $nama, ')
           ..write('email: $email, ')
           ..write('roleId: $roleId, ')
@@ -574,6 +623,19 @@ class $KeuskupansTable extends Keuskupans
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'PRIMARY KEY AUTOINCREMENT',
     ),
+  );
+  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
+  @override
+  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
+    'uuid',
+    aliasedName,
+    true,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 36,
+      maxTextLength: 36,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _namaMeta = const VerificationMeta('nama');
   @override
@@ -646,6 +708,7 @@ class $KeuskupansTable extends Keuskupans
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uuid,
     nama,
     alamat,
     createdAt,
@@ -667,6 +730,12 @@ class $KeuskupansTable extends Keuskupans
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uuid')) {
+      context.handle(
+        _uuidMeta,
+        uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
+      );
     }
     if (data.containsKey('nama')) {
       context.handle(
@@ -721,6 +790,10 @@ class $KeuskupansTable extends Keuskupans
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uuid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uuid'],
+      ),
       nama: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}nama'],
@@ -756,6 +829,7 @@ class $KeuskupansTable extends Keuskupans
 
 class Keuskupan extends DataClass implements Insertable<Keuskupan> {
   final int id;
+  final String? uuid;
   final String nama;
   final String alamat;
   final DateTime createdAt;
@@ -764,6 +838,7 @@ class Keuskupan extends DataClass implements Insertable<Keuskupan> {
   final bool isSynced;
   const Keuskupan({
     required this.id,
+    this.uuid,
     required this.nama,
     required this.alamat,
     required this.createdAt,
@@ -775,6 +850,9 @@ class Keuskupan extends DataClass implements Insertable<Keuskupan> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uuid != null) {
+      map['uuid'] = Variable<String>(uuid);
+    }
     map['nama'] = Variable<String>(nama);
     map['alamat'] = Variable<String>(alamat);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -789,6 +867,7 @@ class Keuskupan extends DataClass implements Insertable<Keuskupan> {
   KeuskupansCompanion toCompanion(bool nullToAbsent) {
     return KeuskupansCompanion(
       id: Value(id),
+      uuid: uuid == null && nullToAbsent ? const Value.absent() : Value(uuid),
       nama: Value(nama),
       alamat: Value(alamat),
       createdAt: Value(createdAt),
@@ -807,6 +886,7 @@ class Keuskupan extends DataClass implements Insertable<Keuskupan> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Keuskupan(
       id: serializer.fromJson<int>(json['id']),
+      uuid: serializer.fromJson<String?>(json['uuid']),
       nama: serializer.fromJson<String>(json['nama']),
       alamat: serializer.fromJson<String>(json['alamat']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
@@ -820,6 +900,7 @@ class Keuskupan extends DataClass implements Insertable<Keuskupan> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uuid': serializer.toJson<String?>(uuid),
       'nama': serializer.toJson<String>(nama),
       'alamat': serializer.toJson<String>(alamat),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -831,6 +912,7 @@ class Keuskupan extends DataClass implements Insertable<Keuskupan> {
 
   Keuskupan copyWith({
     int? id,
+    Value<String?> uuid = const Value.absent(),
     String? nama,
     String? alamat,
     DateTime? createdAt,
@@ -839,6 +921,7 @@ class Keuskupan extends DataClass implements Insertable<Keuskupan> {
     bool? isSynced,
   }) => Keuskupan(
     id: id ?? this.id,
+    uuid: uuid.present ? uuid.value : this.uuid,
     nama: nama ?? this.nama,
     alamat: alamat ?? this.alamat,
     createdAt: createdAt ?? this.createdAt,
@@ -849,6 +932,7 @@ class Keuskupan extends DataClass implements Insertable<Keuskupan> {
   Keuskupan copyWithCompanion(KeuskupansCompanion data) {
     return Keuskupan(
       id: data.id.present ? data.id.value : this.id,
+      uuid: data.uuid.present ? data.uuid.value : this.uuid,
       nama: data.nama.present ? data.nama.value : this.nama,
       alamat: data.alamat.present ? data.alamat.value : this.alamat,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
@@ -862,6 +946,7 @@ class Keuskupan extends DataClass implements Insertable<Keuskupan> {
   String toString() {
     return (StringBuffer('Keuskupan(')
           ..write('id: $id, ')
+          ..write('uuid: $uuid, ')
           ..write('nama: $nama, ')
           ..write('alamat: $alamat, ')
           ..write('createdAt: $createdAt, ')
@@ -873,13 +958,22 @@ class Keuskupan extends DataClass implements Insertable<Keuskupan> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, nama, alamat, createdAt, updatedAt, deletedAt, isSynced);
+  int get hashCode => Object.hash(
+    id,
+    uuid,
+    nama,
+    alamat,
+    createdAt,
+    updatedAt,
+    deletedAt,
+    isSynced,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Keuskupan &&
           other.id == this.id &&
+          other.uuid == this.uuid &&
           other.nama == this.nama &&
           other.alamat == this.alamat &&
           other.createdAt == this.createdAt &&
@@ -890,6 +984,7 @@ class Keuskupan extends DataClass implements Insertable<Keuskupan> {
 
 class KeuskupansCompanion extends UpdateCompanion<Keuskupan> {
   final Value<int> id;
+  final Value<String?> uuid;
   final Value<String> nama;
   final Value<String> alamat;
   final Value<DateTime> createdAt;
@@ -898,6 +993,7 @@ class KeuskupansCompanion extends UpdateCompanion<Keuskupan> {
   final Value<bool> isSynced;
   const KeuskupansCompanion({
     this.id = const Value.absent(),
+    this.uuid = const Value.absent(),
     this.nama = const Value.absent(),
     this.alamat = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -907,6 +1003,7 @@ class KeuskupansCompanion extends UpdateCompanion<Keuskupan> {
   });
   KeuskupansCompanion.insert({
     this.id = const Value.absent(),
+    this.uuid = const Value.absent(),
     required String nama,
     required String alamat,
     this.createdAt = const Value.absent(),
@@ -917,6 +1014,7 @@ class KeuskupansCompanion extends UpdateCompanion<Keuskupan> {
        alamat = Value(alamat);
   static Insertable<Keuskupan> custom({
     Expression<int>? id,
+    Expression<String>? uuid,
     Expression<String>? nama,
     Expression<String>? alamat,
     Expression<DateTime>? createdAt,
@@ -926,6 +1024,7 @@ class KeuskupansCompanion extends UpdateCompanion<Keuskupan> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uuid != null) 'uuid': uuid,
       if (nama != null) 'nama': nama,
       if (alamat != null) 'alamat': alamat,
       if (createdAt != null) 'created_at': createdAt,
@@ -937,6 +1036,7 @@ class KeuskupansCompanion extends UpdateCompanion<Keuskupan> {
 
   KeuskupansCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uuid,
     Value<String>? nama,
     Value<String>? alamat,
     Value<DateTime>? createdAt,
@@ -946,6 +1046,7 @@ class KeuskupansCompanion extends UpdateCompanion<Keuskupan> {
   }) {
     return KeuskupansCompanion(
       id: id ?? this.id,
+      uuid: uuid ?? this.uuid,
       nama: nama ?? this.nama,
       alamat: alamat ?? this.alamat,
       createdAt: createdAt ?? this.createdAt,
@@ -960,6 +1061,9 @@ class KeuskupansCompanion extends UpdateCompanion<Keuskupan> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uuid.present) {
+      map['uuid'] = Variable<String>(uuid.value);
     }
     if (nama.present) {
       map['nama'] = Variable<String>(nama.value);
@@ -986,6 +1090,7 @@ class KeuskupansCompanion extends UpdateCompanion<Keuskupan> {
   String toString() {
     return (StringBuffer('KeuskupansCompanion(')
           ..write('id: $id, ')
+          ..write('uuid: $uuid, ')
           ..write('nama: $nama, ')
           ..write('alamat: $alamat, ')
           ..write('createdAt: $createdAt, ')
@@ -1002,26 +1107,30 @@ class $ParokisTable extends Parokis with TableInfo<$ParokisTable, Paroki> {
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $ParokisTable(this.attachedDatabase, [this._alias]);
-  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
-  @override
-  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
-    'uuid',
-    aliasedName,
-    false,
-    additionalChecks: GeneratedColumn.checkTextLength(
-      minTextLength: 36,
-      maxTextLength: 36,
-    ),
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<int> id = GeneratedColumn<int>(
     'id',
     aliasedName,
-    true,
+    false,
+    hasAutoIncrement: true,
     type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
+  @override
+  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
+    'uuid',
+    aliasedName,
+    true,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 36,
+      maxTextLength: 36,
+    ),
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _namaMeta = const VerificationMeta('nama');
@@ -1106,8 +1215,8 @@ class $ParokisTable extends Parokis with TableInfo<$ParokisTable, Paroki> {
   );
   @override
   List<GeneratedColumn> get $columns => [
-    uuid,
     id,
+    uuid,
     nama,
     alamat,
     keuskupanId,
@@ -1128,16 +1237,14 @@ class $ParokisTable extends Parokis with TableInfo<$ParokisTable, Paroki> {
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
     if (data.containsKey('uuid')) {
       context.handle(
         _uuidMeta,
         uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
       );
-    } else if (isInserting) {
-      context.missing(_uuidMeta);
-    }
-    if (data.containsKey('id')) {
-      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     }
     if (data.containsKey('nama')) {
       context.handle(
@@ -1194,18 +1301,18 @@ class $ParokisTable extends Parokis with TableInfo<$ParokisTable, Paroki> {
   }
 
   @override
-  Set<GeneratedColumn> get $primaryKey => {uuid};
+  Set<GeneratedColumn> get $primaryKey => {id};
   @override
   Paroki map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return Paroki(
-      uuid: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}uuid'],
-      )!,
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}id'],
+      )!,
+      uuid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uuid'],
       ),
       nama: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -1245,8 +1352,8 @@ class $ParokisTable extends Parokis with TableInfo<$ParokisTable, Paroki> {
 }
 
 class Paroki extends DataClass implements Insertable<Paroki> {
-  final String uuid;
-  final int? id;
+  final int id;
+  final String? uuid;
   final String nama;
   final String alamat;
   final int keuskupanId;
@@ -1255,8 +1362,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
   final DateTime? deletedAt;
   final bool isSynced;
   const Paroki({
-    required this.uuid,
-    this.id,
+    required this.id,
+    this.uuid,
     required this.nama,
     required this.alamat,
     required this.keuskupanId,
@@ -1268,9 +1375,9 @@ class Paroki extends DataClass implements Insertable<Paroki> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['uuid'] = Variable<String>(uuid);
-    if (!nullToAbsent || id != null) {
-      map['id'] = Variable<int>(id);
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uuid != null) {
+      map['uuid'] = Variable<String>(uuid);
     }
     map['nama'] = Variable<String>(nama);
     map['alamat'] = Variable<String>(alamat);
@@ -1286,8 +1393,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
 
   ParokisCompanion toCompanion(bool nullToAbsent) {
     return ParokisCompanion(
-      uuid: Value(uuid),
-      id: id == null && nullToAbsent ? const Value.absent() : Value(id),
+      id: Value(id),
+      uuid: uuid == null && nullToAbsent ? const Value.absent() : Value(uuid),
       nama: Value(nama),
       alamat: Value(alamat),
       keuskupanId: Value(keuskupanId),
@@ -1306,8 +1413,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Paroki(
-      uuid: serializer.fromJson<String>(json['uuid']),
-      id: serializer.fromJson<int?>(json['id']),
+      id: serializer.fromJson<int>(json['id']),
+      uuid: serializer.fromJson<String?>(json['uuid']),
       nama: serializer.fromJson<String>(json['nama']),
       alamat: serializer.fromJson<String>(json['alamat']),
       keuskupanId: serializer.fromJson<int>(json['keuskupanId']),
@@ -1321,8 +1428,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'uuid': serializer.toJson<String>(uuid),
-      'id': serializer.toJson<int?>(id),
+      'id': serializer.toJson<int>(id),
+      'uuid': serializer.toJson<String?>(uuid),
       'nama': serializer.toJson<String>(nama),
       'alamat': serializer.toJson<String>(alamat),
       'keuskupanId': serializer.toJson<int>(keuskupanId),
@@ -1334,8 +1441,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
   }
 
   Paroki copyWith({
-    String? uuid,
-    Value<int?> id = const Value.absent(),
+    int? id,
+    Value<String?> uuid = const Value.absent(),
     String? nama,
     String? alamat,
     int? keuskupanId,
@@ -1344,8 +1451,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
     Value<DateTime?> deletedAt = const Value.absent(),
     bool? isSynced,
   }) => Paroki(
-    uuid: uuid ?? this.uuid,
-    id: id.present ? id.value : this.id,
+    id: id ?? this.id,
+    uuid: uuid.present ? uuid.value : this.uuid,
     nama: nama ?? this.nama,
     alamat: alamat ?? this.alamat,
     keuskupanId: keuskupanId ?? this.keuskupanId,
@@ -1356,8 +1463,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
   );
   Paroki copyWithCompanion(ParokisCompanion data) {
     return Paroki(
-      uuid: data.uuid.present ? data.uuid.value : this.uuid,
       id: data.id.present ? data.id.value : this.id,
+      uuid: data.uuid.present ? data.uuid.value : this.uuid,
       nama: data.nama.present ? data.nama.value : this.nama,
       alamat: data.alamat.present ? data.alamat.value : this.alamat,
       keuskupanId: data.keuskupanId.present
@@ -1373,8 +1480,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
   @override
   String toString() {
     return (StringBuffer('Paroki(')
-          ..write('uuid: $uuid, ')
           ..write('id: $id, ')
+          ..write('uuid: $uuid, ')
           ..write('nama: $nama, ')
           ..write('alamat: $alamat, ')
           ..write('keuskupanId: $keuskupanId, ')
@@ -1388,8 +1495,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
 
   @override
   int get hashCode => Object.hash(
-    uuid,
     id,
+    uuid,
     nama,
     alamat,
     keuskupanId,
@@ -1402,8 +1509,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Paroki &&
-          other.uuid == this.uuid &&
           other.id == this.id &&
+          other.uuid == this.uuid &&
           other.nama == this.nama &&
           other.alamat == this.alamat &&
           other.keuskupanId == this.keuskupanId &&
@@ -1414,8 +1521,8 @@ class Paroki extends DataClass implements Insertable<Paroki> {
 }
 
 class ParokisCompanion extends UpdateCompanion<Paroki> {
-  final Value<String> uuid;
-  final Value<int?> id;
+  final Value<int> id;
+  final Value<String?> uuid;
   final Value<String> nama;
   final Value<String> alamat;
   final Value<int> keuskupanId;
@@ -1423,10 +1530,9 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
   final Value<bool> isSynced;
-  final Value<int> rowid;
   const ParokisCompanion({
-    this.uuid = const Value.absent(),
     this.id = const Value.absent(),
+    this.uuid = const Value.absent(),
     this.nama = const Value.absent(),
     this.alamat = const Value.absent(),
     this.keuskupanId = const Value.absent(),
@@ -1434,11 +1540,10 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
     this.isSynced = const Value.absent(),
-    this.rowid = const Value.absent(),
   });
   ParokisCompanion.insert({
-    required String uuid,
     this.id = const Value.absent(),
+    this.uuid = const Value.absent(),
     required String nama,
     required String alamat,
     required int keuskupanId,
@@ -1446,14 +1551,12 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
     this.isSynced = const Value.absent(),
-    this.rowid = const Value.absent(),
-  }) : uuid = Value(uuid),
-       nama = Value(nama),
+  }) : nama = Value(nama),
        alamat = Value(alamat),
        keuskupanId = Value(keuskupanId);
   static Insertable<Paroki> custom({
-    Expression<String>? uuid,
     Expression<int>? id,
+    Expression<String>? uuid,
     Expression<String>? nama,
     Expression<String>? alamat,
     Expression<int>? keuskupanId,
@@ -1461,11 +1564,10 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
     Expression<bool>? isSynced,
-    Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
-      if (uuid != null) 'uuid': uuid,
       if (id != null) 'id': id,
+      if (uuid != null) 'uuid': uuid,
       if (nama != null) 'nama': nama,
       if (alamat != null) 'alamat': alamat,
       if (keuskupanId != null) 'keuskupan_id': keuskupanId,
@@ -1473,13 +1575,12 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
       if (isSynced != null) 'is_synced': isSynced,
-      if (rowid != null) 'rowid': rowid,
     });
   }
 
   ParokisCompanion copyWith({
-    Value<String>? uuid,
-    Value<int?>? id,
+    Value<int>? id,
+    Value<String?>? uuid,
     Value<String>? nama,
     Value<String>? alamat,
     Value<int>? keuskupanId,
@@ -1487,11 +1588,10 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
     Value<bool>? isSynced,
-    Value<int>? rowid,
   }) {
     return ParokisCompanion(
-      uuid: uuid ?? this.uuid,
       id: id ?? this.id,
+      uuid: uuid ?? this.uuid,
       nama: nama ?? this.nama,
       alamat: alamat ?? this.alamat,
       keuskupanId: keuskupanId ?? this.keuskupanId,
@@ -1499,18 +1599,17 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
       isSynced: isSynced ?? this.isSynced,
-      rowid: rowid ?? this.rowid,
     );
   }
 
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    if (uuid.present) {
-      map['uuid'] = Variable<String>(uuid.value);
-    }
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uuid.present) {
+      map['uuid'] = Variable<String>(uuid.value);
     }
     if (nama.present) {
       map['nama'] = Variable<String>(nama.value);
@@ -1533,25 +1632,21 @@ class ParokisCompanion extends UpdateCompanion<Paroki> {
     if (isSynced.present) {
       map['is_synced'] = Variable<bool>(isSynced.value);
     }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
-    }
     return map;
   }
 
   @override
   String toString() {
     return (StringBuffer('ParokisCompanion(')
-          ..write('uuid: $uuid, ')
           ..write('id: $id, ')
+          ..write('uuid: $uuid, ')
           ..write('nama: $nama, ')
           ..write('alamat: $alamat, ')
           ..write('keuskupanId: $keuskupanId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
-          ..write('isSynced: $isSynced, ')
-          ..write('rowid: $rowid')
+          ..write('isSynced: $isSynced')
           ..write(')'))
         .toString();
   }
@@ -1574,6 +1669,19 @@ class $JenisTable extends Jenis with TableInfo<$JenisTable, Jeni> {
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'PRIMARY KEY AUTOINCREMENT',
     ),
+  );
+  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
+  @override
+  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
+    'uuid',
+    aliasedName,
+    true,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 36,
+      maxTextLength: 36,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _namaMeta = const VerificationMeta('nama');
   @override
@@ -1637,6 +1745,7 @@ class $JenisTable extends Jenis with TableInfo<$JenisTable, Jeni> {
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uuid,
     nama,
     createdAt,
     updatedAt,
@@ -1657,6 +1766,12 @@ class $JenisTable extends Jenis with TableInfo<$JenisTable, Jeni> {
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uuid')) {
+      context.handle(
+        _uuidMeta,
+        uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
+      );
     }
     if (data.containsKey('nama')) {
       context.handle(
@@ -1703,6 +1818,10 @@ class $JenisTable extends Jenis with TableInfo<$JenisTable, Jeni> {
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uuid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uuid'],
+      ),
       nama: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}nama'],
@@ -1734,6 +1853,7 @@ class $JenisTable extends Jenis with TableInfo<$JenisTable, Jeni> {
 
 class Jeni extends DataClass implements Insertable<Jeni> {
   final int id;
+  final String? uuid;
   final String nama;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -1741,6 +1861,7 @@ class Jeni extends DataClass implements Insertable<Jeni> {
   final bool isSynced;
   const Jeni({
     required this.id,
+    this.uuid,
     required this.nama,
     required this.createdAt,
     required this.updatedAt,
@@ -1751,6 +1872,9 @@ class Jeni extends DataClass implements Insertable<Jeni> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uuid != null) {
+      map['uuid'] = Variable<String>(uuid);
+    }
     map['nama'] = Variable<String>(nama);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -1764,6 +1888,7 @@ class Jeni extends DataClass implements Insertable<Jeni> {
   JenisCompanion toCompanion(bool nullToAbsent) {
     return JenisCompanion(
       id: Value(id),
+      uuid: uuid == null && nullToAbsent ? const Value.absent() : Value(uuid),
       nama: Value(nama),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -1781,6 +1906,7 @@ class Jeni extends DataClass implements Insertable<Jeni> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Jeni(
       id: serializer.fromJson<int>(json['id']),
+      uuid: serializer.fromJson<String?>(json['uuid']),
       nama: serializer.fromJson<String>(json['nama']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -1793,6 +1919,7 @@ class Jeni extends DataClass implements Insertable<Jeni> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uuid': serializer.toJson<String?>(uuid),
       'nama': serializer.toJson<String>(nama),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -1803,6 +1930,7 @@ class Jeni extends DataClass implements Insertable<Jeni> {
 
   Jeni copyWith({
     int? id,
+    Value<String?> uuid = const Value.absent(),
     String? nama,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -1810,6 +1938,7 @@ class Jeni extends DataClass implements Insertable<Jeni> {
     bool? isSynced,
   }) => Jeni(
     id: id ?? this.id,
+    uuid: uuid.present ? uuid.value : this.uuid,
     nama: nama ?? this.nama,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -1819,6 +1948,7 @@ class Jeni extends DataClass implements Insertable<Jeni> {
   Jeni copyWithCompanion(JenisCompanion data) {
     return Jeni(
       id: data.id.present ? data.id.value : this.id,
+      uuid: data.uuid.present ? data.uuid.value : this.uuid,
       nama: data.nama.present ? data.nama.value : this.nama,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -1831,6 +1961,7 @@ class Jeni extends DataClass implements Insertable<Jeni> {
   String toString() {
     return (StringBuffer('Jeni(')
           ..write('id: $id, ')
+          ..write('uuid: $uuid, ')
           ..write('nama: $nama, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -1842,12 +1973,13 @@ class Jeni extends DataClass implements Insertable<Jeni> {
 
   @override
   int get hashCode =>
-      Object.hash(id, nama, createdAt, updatedAt, deletedAt, isSynced);
+      Object.hash(id, uuid, nama, createdAt, updatedAt, deletedAt, isSynced);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Jeni &&
           other.id == this.id &&
+          other.uuid == this.uuid &&
           other.nama == this.nama &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
@@ -1857,6 +1989,7 @@ class Jeni extends DataClass implements Insertable<Jeni> {
 
 class JenisCompanion extends UpdateCompanion<Jeni> {
   final Value<int> id;
+  final Value<String?> uuid;
   final Value<String> nama;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
@@ -1864,6 +1997,7 @@ class JenisCompanion extends UpdateCompanion<Jeni> {
   final Value<bool> isSynced;
   const JenisCompanion({
     this.id = const Value.absent(),
+    this.uuid = const Value.absent(),
     this.nama = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -1872,6 +2006,7 @@ class JenisCompanion extends UpdateCompanion<Jeni> {
   });
   JenisCompanion.insert({
     this.id = const Value.absent(),
+    this.uuid = const Value.absent(),
     required String nama,
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -1880,6 +2015,7 @@ class JenisCompanion extends UpdateCompanion<Jeni> {
   }) : nama = Value(nama);
   static Insertable<Jeni> custom({
     Expression<int>? id,
+    Expression<String>? uuid,
     Expression<String>? nama,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -1888,6 +2024,7 @@ class JenisCompanion extends UpdateCompanion<Jeni> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uuid != null) 'uuid': uuid,
       if (nama != null) 'nama': nama,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -1898,6 +2035,7 @@ class JenisCompanion extends UpdateCompanion<Jeni> {
 
   JenisCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uuid,
     Value<String>? nama,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
@@ -1906,6 +2044,7 @@ class JenisCompanion extends UpdateCompanion<Jeni> {
   }) {
     return JenisCompanion(
       id: id ?? this.id,
+      uuid: uuid ?? this.uuid,
       nama: nama ?? this.nama,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -1919,6 +2058,9 @@ class JenisCompanion extends UpdateCompanion<Jeni> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uuid.present) {
+      map['uuid'] = Variable<String>(uuid.value);
     }
     if (nama.present) {
       map['nama'] = Variable<String>(nama.value);
@@ -1942,6 +2084,7 @@ class JenisCompanion extends UpdateCompanion<Jeni> {
   String toString() {
     return (StringBuffer('JenisCompanion(')
           ..write('id: $id, ')
+          ..write('uuid: $uuid, ')
           ..write('nama: $nama, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -1969,6 +2112,19 @@ class $AkunsTable extends Akuns with TableInfo<$AkunsTable, Akun> {
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'PRIMARY KEY AUTOINCREMENT',
     ),
+  );
+  static const VerificationMeta _uuidMeta = const VerificationMeta('uuid');
+  @override
+  late final GeneratedColumn<String> uuid = GeneratedColumn<String>(
+    'uuid',
+    aliasedName,
+    true,
+    additionalChecks: GeneratedColumn.checkTextLength(
+      minTextLength: 36,
+      maxTextLength: 36,
+    ),
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _kodeMeta = const VerificationMeta('kode');
   @override
@@ -2053,6 +2209,7 @@ class $AkunsTable extends Akuns with TableInfo<$AkunsTable, Akun> {
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    uuid,
     kode,
     nama,
     jenisId,
@@ -2075,6 +2232,12 @@ class $AkunsTable extends Akuns with TableInfo<$AkunsTable, Akun> {
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('uuid')) {
+      context.handle(
+        _uuidMeta,
+        uuid.isAcceptableOrUnknown(data['uuid']!, _uuidMeta),
+      );
     }
     if (data.containsKey('kode')) {
       context.handle(
@@ -2137,6 +2300,10 @@ class $AkunsTable extends Akuns with TableInfo<$AkunsTable, Akun> {
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      uuid: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}uuid'],
+      ),
       kode: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}kode'],
@@ -2176,6 +2343,7 @@ class $AkunsTable extends Akuns with TableInfo<$AkunsTable, Akun> {
 
 class Akun extends DataClass implements Insertable<Akun> {
   final int id;
+  final String? uuid;
   final String kode;
   final String nama;
   final int jenisId;
@@ -2185,6 +2353,7 @@ class Akun extends DataClass implements Insertable<Akun> {
   final bool isSynced;
   const Akun({
     required this.id,
+    this.uuid,
     required this.kode,
     required this.nama,
     required this.jenisId,
@@ -2197,6 +2366,9 @@ class Akun extends DataClass implements Insertable<Akun> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || uuid != null) {
+      map['uuid'] = Variable<String>(uuid);
+    }
     map['kode'] = Variable<String>(kode);
     map['nama'] = Variable<String>(nama);
     map['jenis_id'] = Variable<int>(jenisId);
@@ -2212,6 +2384,7 @@ class Akun extends DataClass implements Insertable<Akun> {
   AkunsCompanion toCompanion(bool nullToAbsent) {
     return AkunsCompanion(
       id: Value(id),
+      uuid: uuid == null && nullToAbsent ? const Value.absent() : Value(uuid),
       kode: Value(kode),
       nama: Value(nama),
       jenisId: Value(jenisId),
@@ -2231,6 +2404,7 @@ class Akun extends DataClass implements Insertable<Akun> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Akun(
       id: serializer.fromJson<int>(json['id']),
+      uuid: serializer.fromJson<String?>(json['uuid']),
       kode: serializer.fromJson<String>(json['kode']),
       nama: serializer.fromJson<String>(json['nama']),
       jenisId: serializer.fromJson<int>(json['jenisId']),
@@ -2245,6 +2419,7 @@ class Akun extends DataClass implements Insertable<Akun> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'uuid': serializer.toJson<String?>(uuid),
       'kode': serializer.toJson<String>(kode),
       'nama': serializer.toJson<String>(nama),
       'jenisId': serializer.toJson<int>(jenisId),
@@ -2257,6 +2432,7 @@ class Akun extends DataClass implements Insertable<Akun> {
 
   Akun copyWith({
     int? id,
+    Value<String?> uuid = const Value.absent(),
     String? kode,
     String? nama,
     int? jenisId,
@@ -2266,6 +2442,7 @@ class Akun extends DataClass implements Insertable<Akun> {
     bool? isSynced,
   }) => Akun(
     id: id ?? this.id,
+    uuid: uuid.present ? uuid.value : this.uuid,
     kode: kode ?? this.kode,
     nama: nama ?? this.nama,
     jenisId: jenisId ?? this.jenisId,
@@ -2277,6 +2454,7 @@ class Akun extends DataClass implements Insertable<Akun> {
   Akun copyWithCompanion(AkunsCompanion data) {
     return Akun(
       id: data.id.present ? data.id.value : this.id,
+      uuid: data.uuid.present ? data.uuid.value : this.uuid,
       kode: data.kode.present ? data.kode.value : this.kode,
       nama: data.nama.present ? data.nama.value : this.nama,
       jenisId: data.jenisId.present ? data.jenisId.value : this.jenisId,
@@ -2291,6 +2469,7 @@ class Akun extends DataClass implements Insertable<Akun> {
   String toString() {
     return (StringBuffer('Akun(')
           ..write('id: $id, ')
+          ..write('uuid: $uuid, ')
           ..write('kode: $kode, ')
           ..write('nama: $nama, ')
           ..write('jenisId: $jenisId, ')
@@ -2305,6 +2484,7 @@ class Akun extends DataClass implements Insertable<Akun> {
   @override
   int get hashCode => Object.hash(
     id,
+    uuid,
     kode,
     nama,
     jenisId,
@@ -2318,6 +2498,7 @@ class Akun extends DataClass implements Insertable<Akun> {
       identical(this, other) ||
       (other is Akun &&
           other.id == this.id &&
+          other.uuid == this.uuid &&
           other.kode == this.kode &&
           other.nama == this.nama &&
           other.jenisId == this.jenisId &&
@@ -2329,6 +2510,7 @@ class Akun extends DataClass implements Insertable<Akun> {
 
 class AkunsCompanion extends UpdateCompanion<Akun> {
   final Value<int> id;
+  final Value<String?> uuid;
   final Value<String> kode;
   final Value<String> nama;
   final Value<int> jenisId;
@@ -2338,6 +2520,7 @@ class AkunsCompanion extends UpdateCompanion<Akun> {
   final Value<bool> isSynced;
   const AkunsCompanion({
     this.id = const Value.absent(),
+    this.uuid = const Value.absent(),
     this.kode = const Value.absent(),
     this.nama = const Value.absent(),
     this.jenisId = const Value.absent(),
@@ -2348,6 +2531,7 @@ class AkunsCompanion extends UpdateCompanion<Akun> {
   });
   AkunsCompanion.insert({
     this.id = const Value.absent(),
+    this.uuid = const Value.absent(),
     required String kode,
     required String nama,
     required int jenisId,
@@ -2360,6 +2544,7 @@ class AkunsCompanion extends UpdateCompanion<Akun> {
        jenisId = Value(jenisId);
   static Insertable<Akun> custom({
     Expression<int>? id,
+    Expression<String>? uuid,
     Expression<String>? kode,
     Expression<String>? nama,
     Expression<int>? jenisId,
@@ -2370,6 +2555,7 @@ class AkunsCompanion extends UpdateCompanion<Akun> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (uuid != null) 'uuid': uuid,
       if (kode != null) 'kode': kode,
       if (nama != null) 'nama': nama,
       if (jenisId != null) 'jenis_id': jenisId,
@@ -2382,6 +2568,7 @@ class AkunsCompanion extends UpdateCompanion<Akun> {
 
   AkunsCompanion copyWith({
     Value<int>? id,
+    Value<String?>? uuid,
     Value<String>? kode,
     Value<String>? nama,
     Value<int>? jenisId,
@@ -2392,6 +2579,7 @@ class AkunsCompanion extends UpdateCompanion<Akun> {
   }) {
     return AkunsCompanion(
       id: id ?? this.id,
+      uuid: uuid ?? this.uuid,
       kode: kode ?? this.kode,
       nama: nama ?? this.nama,
       jenisId: jenisId ?? this.jenisId,
@@ -2407,6 +2595,9 @@ class AkunsCompanion extends UpdateCompanion<Akun> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (uuid.present) {
+      map['uuid'] = Variable<String>(uuid.value);
     }
     if (kode.present) {
       map['kode'] = Variable<String>(kode.value);
@@ -2436,6 +2627,7 @@ class AkunsCompanion extends UpdateCompanion<Akun> {
   String toString() {
     return (StringBuffer('AkunsCompanion(')
           ..write('id: $id, ')
+          ..write('uuid: $uuid, ')
           ..write('kode: $kode, ')
           ..write('nama: $nama, ')
           ..write('jenisId: $jenisId, ')
@@ -2504,6 +2696,18 @@ class $JurnalsTable extends Jurnals with TableInfo<$JurnalsTable, Jurnal> {
     true,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+  );
+  static const VerificationMeta _jenisPembatasanMeta = const VerificationMeta(
+    'jenisPembatasan',
+  );
+  @override
+  late final GeneratedColumn<String> jenisPembatasan = GeneratedColumn<String>(
+    'jenis_pembatasan',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('Tanpa Pembatasan'),
   );
   static const VerificationMeta _createdByMeta = const VerificationMeta(
     'createdBy',
@@ -2595,6 +2799,7 @@ class $JurnalsTable extends Jurnals with TableInfo<$JurnalsTable, Jurnal> {
     tanggal,
     deskripsi,
     noBukti,
+    jenisPembatasan,
     createdBy,
     updatedBy,
     deletedBy,
@@ -2641,6 +2846,15 @@ class $JurnalsTable extends Jurnals with TableInfo<$JurnalsTable, Jurnal> {
       context.handle(
         _noBuktiMeta,
         noBukti.isAcceptableOrUnknown(data['no_bukti']!, _noBuktiMeta),
+      );
+    }
+    if (data.containsKey('jenis_pembatasan')) {
+      context.handle(
+        _jenisPembatasanMeta,
+        jenisPembatasan.isAcceptableOrUnknown(
+          data['jenis_pembatasan']!,
+          _jenisPembatasanMeta,
+        ),
       );
     }
     if (data.containsKey('created_by')) {
@@ -2716,6 +2930,10 @@ class $JurnalsTable extends Jurnals with TableInfo<$JurnalsTable, Jurnal> {
         DriftSqlType.string,
         data['${effectivePrefix}no_bukti'],
       ),
+      jenisPembatasan: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}jenis_pembatasan'],
+      )!,
       createdBy: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}created_by'],
@@ -2762,6 +2980,7 @@ class Jurnal extends DataClass implements Insertable<Jurnal> {
   final DateTime tanggal;
   final String? deskripsi;
   final String? noBukti;
+  final String jenisPembatasan;
   final int? createdBy;
   final int? updatedBy;
   final int? deletedBy;
@@ -2775,6 +2994,7 @@ class Jurnal extends DataClass implements Insertable<Jurnal> {
     required this.tanggal,
     this.deskripsi,
     this.noBukti,
+    required this.jenisPembatasan,
     this.createdBy,
     this.updatedBy,
     this.deletedBy,
@@ -2799,6 +3019,7 @@ class Jurnal extends DataClass implements Insertable<Jurnal> {
     if (!nullToAbsent || noBukti != null) {
       map['no_bukti'] = Variable<String>(noBukti);
     }
+    map['jenis_pembatasan'] = Variable<String>(jenisPembatasan);
     if (!nullToAbsent || createdBy != null) {
       map['created_by'] = Variable<int>(createdBy);
     }
@@ -2828,6 +3049,7 @@ class Jurnal extends DataClass implements Insertable<Jurnal> {
       noBukti: noBukti == null && nullToAbsent
           ? const Value.absent()
           : Value(noBukti),
+      jenisPembatasan: Value(jenisPembatasan),
       createdBy: createdBy == null && nullToAbsent
           ? const Value.absent()
           : Value(createdBy),
@@ -2857,6 +3079,7 @@ class Jurnal extends DataClass implements Insertable<Jurnal> {
       tanggal: serializer.fromJson<DateTime>(json['tanggal']),
       deskripsi: serializer.fromJson<String?>(json['deskripsi']),
       noBukti: serializer.fromJson<String?>(json['noBukti']),
+      jenisPembatasan: serializer.fromJson<String>(json['jenisPembatasan']),
       createdBy: serializer.fromJson<int?>(json['createdBy']),
       updatedBy: serializer.fromJson<int?>(json['updatedBy']),
       deletedBy: serializer.fromJson<int?>(json['deletedBy']),
@@ -2875,6 +3098,7 @@ class Jurnal extends DataClass implements Insertable<Jurnal> {
       'tanggal': serializer.toJson<DateTime>(tanggal),
       'deskripsi': serializer.toJson<String?>(deskripsi),
       'noBukti': serializer.toJson<String?>(noBukti),
+      'jenisPembatasan': serializer.toJson<String>(jenisPembatasan),
       'createdBy': serializer.toJson<int?>(createdBy),
       'updatedBy': serializer.toJson<int?>(updatedBy),
       'deletedBy': serializer.toJson<int?>(deletedBy),
@@ -2891,6 +3115,7 @@ class Jurnal extends DataClass implements Insertable<Jurnal> {
     DateTime? tanggal,
     Value<String?> deskripsi = const Value.absent(),
     Value<String?> noBukti = const Value.absent(),
+    String? jenisPembatasan,
     Value<int?> createdBy = const Value.absent(),
     Value<int?> updatedBy = const Value.absent(),
     Value<int?> deletedBy = const Value.absent(),
@@ -2904,6 +3129,7 @@ class Jurnal extends DataClass implements Insertable<Jurnal> {
     tanggal: tanggal ?? this.tanggal,
     deskripsi: deskripsi.present ? deskripsi.value : this.deskripsi,
     noBukti: noBukti.present ? noBukti.value : this.noBukti,
+    jenisPembatasan: jenisPembatasan ?? this.jenisPembatasan,
     createdBy: createdBy.present ? createdBy.value : this.createdBy,
     updatedBy: updatedBy.present ? updatedBy.value : this.updatedBy,
     deletedBy: deletedBy.present ? deletedBy.value : this.deletedBy,
@@ -2921,6 +3147,9 @@ class Jurnal extends DataClass implements Insertable<Jurnal> {
       tanggal: data.tanggal.present ? data.tanggal.value : this.tanggal,
       deskripsi: data.deskripsi.present ? data.deskripsi.value : this.deskripsi,
       noBukti: data.noBukti.present ? data.noBukti.value : this.noBukti,
+      jenisPembatasan: data.jenisPembatasan.present
+          ? data.jenisPembatasan.value
+          : this.jenisPembatasan,
       createdBy: data.createdBy.present ? data.createdBy.value : this.createdBy,
       updatedBy: data.updatedBy.present ? data.updatedBy.value : this.updatedBy,
       deletedBy: data.deletedBy.present ? data.deletedBy.value : this.deletedBy,
@@ -2939,6 +3168,7 @@ class Jurnal extends DataClass implements Insertable<Jurnal> {
           ..write('tanggal: $tanggal, ')
           ..write('deskripsi: $deskripsi, ')
           ..write('noBukti: $noBukti, ')
+          ..write('jenisPembatasan: $jenisPembatasan, ')
           ..write('createdBy: $createdBy, ')
           ..write('updatedBy: $updatedBy, ')
           ..write('deletedBy: $deletedBy, ')
@@ -2957,6 +3187,7 @@ class Jurnal extends DataClass implements Insertable<Jurnal> {
     tanggal,
     deskripsi,
     noBukti,
+    jenisPembatasan,
     createdBy,
     updatedBy,
     deletedBy,
@@ -2974,6 +3205,7 @@ class Jurnal extends DataClass implements Insertable<Jurnal> {
           other.tanggal == this.tanggal &&
           other.deskripsi == this.deskripsi &&
           other.noBukti == this.noBukti &&
+          other.jenisPembatasan == this.jenisPembatasan &&
           other.createdBy == this.createdBy &&
           other.updatedBy == this.updatedBy &&
           other.deletedBy == this.deletedBy &&
@@ -2989,6 +3221,7 @@ class JurnalsCompanion extends UpdateCompanion<Jurnal> {
   final Value<DateTime> tanggal;
   final Value<String?> deskripsi;
   final Value<String?> noBukti;
+  final Value<String> jenisPembatasan;
   final Value<int?> createdBy;
   final Value<int?> updatedBy;
   final Value<int?> deletedBy;
@@ -3003,6 +3236,7 @@ class JurnalsCompanion extends UpdateCompanion<Jurnal> {
     this.tanggal = const Value.absent(),
     this.deskripsi = const Value.absent(),
     this.noBukti = const Value.absent(),
+    this.jenisPembatasan = const Value.absent(),
     this.createdBy = const Value.absent(),
     this.updatedBy = const Value.absent(),
     this.deletedBy = const Value.absent(),
@@ -3018,6 +3252,7 @@ class JurnalsCompanion extends UpdateCompanion<Jurnal> {
     required DateTime tanggal,
     this.deskripsi = const Value.absent(),
     this.noBukti = const Value.absent(),
+    this.jenisPembatasan = const Value.absent(),
     this.createdBy = const Value.absent(),
     this.updatedBy = const Value.absent(),
     this.deletedBy = const Value.absent(),
@@ -3035,6 +3270,7 @@ class JurnalsCompanion extends UpdateCompanion<Jurnal> {
     Expression<String>? tanggal,
     Expression<String>? deskripsi,
     Expression<String>? noBukti,
+    Expression<String>? jenisPembatasan,
     Expression<int>? createdBy,
     Expression<int>? updatedBy,
     Expression<int>? deletedBy,
@@ -3050,6 +3286,7 @@ class JurnalsCompanion extends UpdateCompanion<Jurnal> {
       if (tanggal != null) 'tanggal': tanggal,
       if (deskripsi != null) 'deskripsi': deskripsi,
       if (noBukti != null) 'no_bukti': noBukti,
+      if (jenisPembatasan != null) 'jenis_pembatasan': jenisPembatasan,
       if (createdBy != null) 'created_by': createdBy,
       if (updatedBy != null) 'updated_by': updatedBy,
       if (deletedBy != null) 'deleted_by': deletedBy,
@@ -3067,6 +3304,7 @@ class JurnalsCompanion extends UpdateCompanion<Jurnal> {
     Value<DateTime>? tanggal,
     Value<String?>? deskripsi,
     Value<String?>? noBukti,
+    Value<String>? jenisPembatasan,
     Value<int?>? createdBy,
     Value<int?>? updatedBy,
     Value<int?>? deletedBy,
@@ -3082,6 +3320,7 @@ class JurnalsCompanion extends UpdateCompanion<Jurnal> {
       tanggal: tanggal ?? this.tanggal,
       deskripsi: deskripsi ?? this.deskripsi,
       noBukti: noBukti ?? this.noBukti,
+      jenisPembatasan: jenisPembatasan ?? this.jenisPembatasan,
       createdBy: createdBy ?? this.createdBy,
       updatedBy: updatedBy ?? this.updatedBy,
       deletedBy: deletedBy ?? this.deletedBy,
@@ -3112,6 +3351,9 @@ class JurnalsCompanion extends UpdateCompanion<Jurnal> {
     }
     if (noBukti.present) {
       map['no_bukti'] = Variable<String>(noBukti.value);
+    }
+    if (jenisPembatasan.present) {
+      map['jenis_pembatasan'] = Variable<String>(jenisPembatasan.value);
     }
     if (createdBy.present) {
       map['created_by'] = Variable<int>(createdBy.value);
@@ -3148,6 +3390,7 @@ class JurnalsCompanion extends UpdateCompanion<Jurnal> {
           ..write('tanggal: $tanggal, ')
           ..write('deskripsi: $deskripsi, ')
           ..write('noBukti: $noBukti, ')
+          ..write('jenisPembatasan: $jenisPembatasan, ')
           ..write('createdBy: $createdBy, ')
           ..write('updatedBy: $updatedBy, ')
           ..write('deletedBy: $deletedBy, ')
@@ -3213,6 +3456,40 @@ class $DetilJurnalsTable extends DetilJurnals
     type: DriftSqlType.int,
     requiredDuringInsert: true,
     $customConstraints: 'REFERENCES parokis(id)',
+  );
+  static const VerificationMeta _akunDebitIdMeta = const VerificationMeta(
+    'akunDebitId',
+  );
+  @override
+  late final GeneratedColumn<int> akunDebitId = GeneratedColumn<int>(
+    'akun_debit_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    $customConstraints: 'REFERENCES akuns(id)',
+  );
+  static const VerificationMeta _akunKreditIdMeta = const VerificationMeta(
+    'akunKreditId',
+  );
+  @override
+  late final GeneratedColumn<int> akunKreditId = GeneratedColumn<int>(
+    'akun_kredit_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    $customConstraints: 'REFERENCES akuns(id)',
+  );
+  static const VerificationMeta _jumlahMeta = const VerificationMeta('jumlah');
+  @override
+  late final GeneratedColumn<double> jumlah = GeneratedColumn<double>(
+    'jumlah',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
   );
   static const VerificationMeta _debitMeta = const VerificationMeta('debit');
   @override
@@ -3334,6 +3611,9 @@ class $DetilJurnalsTable extends DetilJurnals
     jurnalId,
     akunId,
     parokiId,
+    akunDebitId,
+    akunKreditId,
+    jumlah,
     debit,
     kredit,
     keterangan,
@@ -3383,6 +3663,30 @@ class $DetilJurnalsTable extends DetilJurnals
       );
     } else if (isInserting) {
       context.missing(_parokiIdMeta);
+    }
+    if (data.containsKey('akun_debit_id')) {
+      context.handle(
+        _akunDebitIdMeta,
+        akunDebitId.isAcceptableOrUnknown(
+          data['akun_debit_id']!,
+          _akunDebitIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('akun_kredit_id')) {
+      context.handle(
+        _akunKreditIdMeta,
+        akunKreditId.isAcceptableOrUnknown(
+          data['akun_kredit_id']!,
+          _akunKreditIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('jumlah')) {
+      context.handle(
+        _jumlahMeta,
+        jumlah.isAcceptableOrUnknown(data['jumlah']!, _jumlahMeta),
+      );
     }
     if (data.containsKey('debit')) {
       context.handle(
@@ -3469,6 +3773,18 @@ class $DetilJurnalsTable extends DetilJurnals
         DriftSqlType.int,
         data['${effectivePrefix}paroki_id'],
       )!,
+      akunDebitId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}akun_debit_id'],
+      ),
+      akunKreditId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}akun_kredit_id'],
+      ),
+      jumlah: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}jumlah'],
+      ),
       debit: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}debit'],
@@ -3523,6 +3839,9 @@ class DetilJurnal extends DataClass implements Insertable<DetilJurnal> {
   final String jurnalId;
   final int akunId;
   final int parokiId;
+  final int? akunDebitId;
+  final int? akunKreditId;
+  final double? jumlah;
   final double? debit;
   final double? kredit;
   final String? keterangan;
@@ -3538,6 +3857,9 @@ class DetilJurnal extends DataClass implements Insertable<DetilJurnal> {
     required this.jurnalId,
     required this.akunId,
     required this.parokiId,
+    this.akunDebitId,
+    this.akunKreditId,
+    this.jumlah,
     this.debit,
     this.kredit,
     this.keterangan,
@@ -3556,6 +3878,15 @@ class DetilJurnal extends DataClass implements Insertable<DetilJurnal> {
     map['jurnal_id'] = Variable<String>(jurnalId);
     map['akun_id'] = Variable<int>(akunId);
     map['paroki_id'] = Variable<int>(parokiId);
+    if (!nullToAbsent || akunDebitId != null) {
+      map['akun_debit_id'] = Variable<int>(akunDebitId);
+    }
+    if (!nullToAbsent || akunKreditId != null) {
+      map['akun_kredit_id'] = Variable<int>(akunKreditId);
+    }
+    if (!nullToAbsent || jumlah != null) {
+      map['jumlah'] = Variable<double>(jumlah);
+    }
     if (!nullToAbsent || debit != null) {
       map['debit'] = Variable<double>(debit);
     }
@@ -3589,6 +3920,15 @@ class DetilJurnal extends DataClass implements Insertable<DetilJurnal> {
       jurnalId: Value(jurnalId),
       akunId: Value(akunId),
       parokiId: Value(parokiId),
+      akunDebitId: akunDebitId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(akunDebitId),
+      akunKreditId: akunKreditId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(akunKreditId),
+      jumlah: jumlah == null && nullToAbsent
+          ? const Value.absent()
+          : Value(jumlah),
       debit: debit == null && nullToAbsent
           ? const Value.absent()
           : Value(debit),
@@ -3626,6 +3966,9 @@ class DetilJurnal extends DataClass implements Insertable<DetilJurnal> {
       jurnalId: serializer.fromJson<String>(json['jurnalId']),
       akunId: serializer.fromJson<int>(json['akunId']),
       parokiId: serializer.fromJson<int>(json['parokiId']),
+      akunDebitId: serializer.fromJson<int?>(json['akunDebitId']),
+      akunKreditId: serializer.fromJson<int?>(json['akunKreditId']),
+      jumlah: serializer.fromJson<double?>(json['jumlah']),
       debit: serializer.fromJson<double?>(json['debit']),
       kredit: serializer.fromJson<double?>(json['kredit']),
       keterangan: serializer.fromJson<String?>(json['keterangan']),
@@ -3646,6 +3989,9 @@ class DetilJurnal extends DataClass implements Insertable<DetilJurnal> {
       'jurnalId': serializer.toJson<String>(jurnalId),
       'akunId': serializer.toJson<int>(akunId),
       'parokiId': serializer.toJson<int>(parokiId),
+      'akunDebitId': serializer.toJson<int?>(akunDebitId),
+      'akunKreditId': serializer.toJson<int?>(akunKreditId),
+      'jumlah': serializer.toJson<double?>(jumlah),
       'debit': serializer.toJson<double?>(debit),
       'kredit': serializer.toJson<double?>(kredit),
       'keterangan': serializer.toJson<String?>(keterangan),
@@ -3664,6 +4010,9 @@ class DetilJurnal extends DataClass implements Insertable<DetilJurnal> {
     String? jurnalId,
     int? akunId,
     int? parokiId,
+    Value<int?> akunDebitId = const Value.absent(),
+    Value<int?> akunKreditId = const Value.absent(),
+    Value<double?> jumlah = const Value.absent(),
     Value<double?> debit = const Value.absent(),
     Value<double?> kredit = const Value.absent(),
     Value<String?> keterangan = const Value.absent(),
@@ -3679,6 +4028,9 @@ class DetilJurnal extends DataClass implements Insertable<DetilJurnal> {
     jurnalId: jurnalId ?? this.jurnalId,
     akunId: akunId ?? this.akunId,
     parokiId: parokiId ?? this.parokiId,
+    akunDebitId: akunDebitId.present ? akunDebitId.value : this.akunDebitId,
+    akunKreditId: akunKreditId.present ? akunKreditId.value : this.akunKreditId,
+    jumlah: jumlah.present ? jumlah.value : this.jumlah,
     debit: debit.present ? debit.value : this.debit,
     kredit: kredit.present ? kredit.value : this.kredit,
     keterangan: keterangan.present ? keterangan.value : this.keterangan,
@@ -3696,6 +4048,13 @@ class DetilJurnal extends DataClass implements Insertable<DetilJurnal> {
       jurnalId: data.jurnalId.present ? data.jurnalId.value : this.jurnalId,
       akunId: data.akunId.present ? data.akunId.value : this.akunId,
       parokiId: data.parokiId.present ? data.parokiId.value : this.parokiId,
+      akunDebitId: data.akunDebitId.present
+          ? data.akunDebitId.value
+          : this.akunDebitId,
+      akunKreditId: data.akunKreditId.present
+          ? data.akunKreditId.value
+          : this.akunKreditId,
+      jumlah: data.jumlah.present ? data.jumlah.value : this.jumlah,
       debit: data.debit.present ? data.debit.value : this.debit,
       kredit: data.kredit.present ? data.kredit.value : this.kredit,
       keterangan: data.keterangan.present
@@ -3718,6 +4077,9 @@ class DetilJurnal extends DataClass implements Insertable<DetilJurnal> {
           ..write('jurnalId: $jurnalId, ')
           ..write('akunId: $akunId, ')
           ..write('parokiId: $parokiId, ')
+          ..write('akunDebitId: $akunDebitId, ')
+          ..write('akunKreditId: $akunKreditId, ')
+          ..write('jumlah: $jumlah, ')
           ..write('debit: $debit, ')
           ..write('kredit: $kredit, ')
           ..write('keterangan: $keterangan, ')
@@ -3738,6 +4100,9 @@ class DetilJurnal extends DataClass implements Insertable<DetilJurnal> {
     jurnalId,
     akunId,
     parokiId,
+    akunDebitId,
+    akunKreditId,
+    jumlah,
     debit,
     kredit,
     keterangan,
@@ -3757,6 +4122,9 @@ class DetilJurnal extends DataClass implements Insertable<DetilJurnal> {
           other.jurnalId == this.jurnalId &&
           other.akunId == this.akunId &&
           other.parokiId == this.parokiId &&
+          other.akunDebitId == this.akunDebitId &&
+          other.akunKreditId == this.akunKreditId &&
+          other.jumlah == this.jumlah &&
           other.debit == this.debit &&
           other.kredit == this.kredit &&
           other.keterangan == this.keterangan &&
@@ -3774,6 +4142,9 @@ class DetilJurnalsCompanion extends UpdateCompanion<DetilJurnal> {
   final Value<String> jurnalId;
   final Value<int> akunId;
   final Value<int> parokiId;
+  final Value<int?> akunDebitId;
+  final Value<int?> akunKreditId;
+  final Value<double?> jumlah;
   final Value<double?> debit;
   final Value<double?> kredit;
   final Value<String?> keterangan;
@@ -3789,6 +4160,9 @@ class DetilJurnalsCompanion extends UpdateCompanion<DetilJurnal> {
     this.jurnalId = const Value.absent(),
     this.akunId = const Value.absent(),
     this.parokiId = const Value.absent(),
+    this.akunDebitId = const Value.absent(),
+    this.akunKreditId = const Value.absent(),
+    this.jumlah = const Value.absent(),
     this.debit = const Value.absent(),
     this.kredit = const Value.absent(),
     this.keterangan = const Value.absent(),
@@ -3805,6 +4179,9 @@ class DetilJurnalsCompanion extends UpdateCompanion<DetilJurnal> {
     required String jurnalId,
     required int akunId,
     required int parokiId,
+    this.akunDebitId = const Value.absent(),
+    this.akunKreditId = const Value.absent(),
+    this.jumlah = const Value.absent(),
     this.debit = const Value.absent(),
     this.kredit = const Value.absent(),
     this.keterangan = const Value.absent(),
@@ -3823,6 +4200,9 @@ class DetilJurnalsCompanion extends UpdateCompanion<DetilJurnal> {
     Expression<String>? jurnalId,
     Expression<int>? akunId,
     Expression<int>? parokiId,
+    Expression<int>? akunDebitId,
+    Expression<int>? akunKreditId,
+    Expression<double>? jumlah,
     Expression<double>? debit,
     Expression<double>? kredit,
     Expression<String>? keterangan,
@@ -3839,6 +4219,9 @@ class DetilJurnalsCompanion extends UpdateCompanion<DetilJurnal> {
       if (jurnalId != null) 'jurnal_id': jurnalId,
       if (akunId != null) 'akun_id': akunId,
       if (parokiId != null) 'paroki_id': parokiId,
+      if (akunDebitId != null) 'akun_debit_id': akunDebitId,
+      if (akunKreditId != null) 'akun_kredit_id': akunKreditId,
+      if (jumlah != null) 'jumlah': jumlah,
       if (debit != null) 'debit': debit,
       if (kredit != null) 'kredit': kredit,
       if (keterangan != null) 'keterangan': keterangan,
@@ -3857,6 +4240,9 @@ class DetilJurnalsCompanion extends UpdateCompanion<DetilJurnal> {
     Value<String>? jurnalId,
     Value<int>? akunId,
     Value<int>? parokiId,
+    Value<int?>? akunDebitId,
+    Value<int?>? akunKreditId,
+    Value<double?>? jumlah,
     Value<double?>? debit,
     Value<double?>? kredit,
     Value<String?>? keterangan,
@@ -3873,6 +4259,9 @@ class DetilJurnalsCompanion extends UpdateCompanion<DetilJurnal> {
       jurnalId: jurnalId ?? this.jurnalId,
       akunId: akunId ?? this.akunId,
       parokiId: parokiId ?? this.parokiId,
+      akunDebitId: akunDebitId ?? this.akunDebitId,
+      akunKreditId: akunKreditId ?? this.akunKreditId,
+      jumlah: jumlah ?? this.jumlah,
       debit: debit ?? this.debit,
       kredit: kredit ?? this.kredit,
       keterangan: keterangan ?? this.keterangan,
@@ -3900,6 +4289,15 @@ class DetilJurnalsCompanion extends UpdateCompanion<DetilJurnal> {
     }
     if (parokiId.present) {
       map['paroki_id'] = Variable<int>(parokiId.value);
+    }
+    if (akunDebitId.present) {
+      map['akun_debit_id'] = Variable<int>(akunDebitId.value);
+    }
+    if (akunKreditId.present) {
+      map['akun_kredit_id'] = Variable<int>(akunKreditId.value);
+    }
+    if (jumlah.present) {
+      map['jumlah'] = Variable<double>(jumlah.value);
     }
     if (debit.present) {
       map['debit'] = Variable<double>(debit.value);
@@ -3941,6 +4339,9 @@ class DetilJurnalsCompanion extends UpdateCompanion<DetilJurnal> {
           ..write('jurnalId: $jurnalId, ')
           ..write('akunId: $akunId, ')
           ..write('parokiId: $parokiId, ')
+          ..write('akunDebitId: $akunDebitId, ')
+          ..write('akunKreditId: $akunKreditId, ')
+          ..write('jumlah: $jumlah, ')
           ..write('debit: $debit, ')
           ..write('kredit: $kredit, ')
           ..write('keterangan: $keterangan, ')
@@ -4838,6 +5239,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
 typedef $$UsersTableCreateCompanionBuilder =
     UsersCompanion Function({
       required String id,
+      Value<String?> uuid,
       required String nama,
       required String email,
       Value<int?> roleId,
@@ -4851,6 +5253,7 @@ typedef $$UsersTableCreateCompanionBuilder =
 typedef $$UsersTableUpdateCompanionBuilder =
     UsersCompanion Function({
       Value<String> id,
+      Value<String?> uuid,
       Value<String> nama,
       Value<String> email,
       Value<int?> roleId,
@@ -4872,6 +5275,11 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
   });
   ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uuid => $composableBuilder(
+    column: $table.uuid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4930,6 +5338,11 @@ class $$UsersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uuid => $composableBuilder(
+    column: $table.uuid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get nama => $composableBuilder(
     column: $table.nama,
     builder: (column) => ColumnOrderings(column),
@@ -4982,6 +5395,9 @@ class $$UsersTableAnnotationComposer
   });
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uuid =>
+      $composableBuilder(column: $table.uuid, builder: (column) => column);
 
   GeneratedColumn<String> get nama =>
       $composableBuilder(column: $table.nama, builder: (column) => column);
@@ -5037,6 +5453,7 @@ class $$UsersTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
+                Value<String?> uuid = const Value.absent(),
                 Value<String> nama = const Value.absent(),
                 Value<String> email = const Value.absent(),
                 Value<int?> roleId = const Value.absent(),
@@ -5048,6 +5465,7 @@ class $$UsersTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => UsersCompanion(
                 id: id,
+                uuid: uuid,
                 nama: nama,
                 email: email,
                 roleId: roleId,
@@ -5061,6 +5479,7 @@ class $$UsersTableTableManager
           createCompanionCallback:
               ({
                 required String id,
+                Value<String?> uuid = const Value.absent(),
                 required String nama,
                 required String email,
                 Value<int?> roleId = const Value.absent(),
@@ -5072,6 +5491,7 @@ class $$UsersTableTableManager
                 Value<int> rowid = const Value.absent(),
               }) => UsersCompanion.insert(
                 id: id,
+                uuid: uuid,
                 nama: nama,
                 email: email,
                 roleId: roleId,
@@ -5107,6 +5527,7 @@ typedef $$UsersTableProcessedTableManager =
 typedef $$KeuskupansTableCreateCompanionBuilder =
     KeuskupansCompanion Function({
       Value<int> id,
+      Value<String?> uuid,
       required String nama,
       required String alamat,
       Value<DateTime> createdAt,
@@ -5117,6 +5538,7 @@ typedef $$KeuskupansTableCreateCompanionBuilder =
 typedef $$KeuskupansTableUpdateCompanionBuilder =
     KeuskupansCompanion Function({
       Value<int> id,
+      Value<String?> uuid,
       Value<String> nama,
       Value<String> alamat,
       Value<DateTime> createdAt,
@@ -5179,6 +5601,11 @@ class $$KeuskupansTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uuid => $composableBuilder(
+    column: $table.uuid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5277,6 +5704,11 @@ class $$KeuskupansTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uuid => $composableBuilder(
+    column: $table.uuid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get nama => $composableBuilder(
     column: $table.nama,
     builder: (column) => ColumnOrderings(column),
@@ -5319,6 +5751,9 @@ class $$KeuskupansTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uuid =>
+      $composableBuilder(column: $table.uuid, builder: (column) => column);
 
   GeneratedColumn<String> get nama =>
       $composableBuilder(column: $table.nama, builder: (column) => column);
@@ -5418,6 +5853,7 @@ class $$KeuskupansTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uuid = const Value.absent(),
                 Value<String> nama = const Value.absent(),
                 Value<String> alamat = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -5426,6 +5862,7 @@ class $$KeuskupansTableTableManager
                 Value<bool> isSynced = const Value.absent(),
               }) => KeuskupansCompanion(
                 id: id,
+                uuid: uuid,
                 nama: nama,
                 alamat: alamat,
                 createdAt: createdAt,
@@ -5436,6 +5873,7 @@ class $$KeuskupansTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uuid = const Value.absent(),
                 required String nama,
                 required String alamat,
                 Value<DateTime> createdAt = const Value.absent(),
@@ -5444,6 +5882,7 @@ class $$KeuskupansTableTableManager
                 Value<bool> isSynced = const Value.absent(),
               }) => KeuskupansCompanion.insert(
                 id: id,
+                uuid: uuid,
                 nama: nama,
                 alamat: alamat,
                 createdAt: createdAt,
@@ -5535,8 +5974,8 @@ typedef $$KeuskupansTableProcessedTableManager =
     >;
 typedef $$ParokisTableCreateCompanionBuilder =
     ParokisCompanion Function({
-      required String uuid,
-      Value<int?> id,
+      Value<int> id,
+      Value<String?> uuid,
       required String nama,
       required String alamat,
       required int keuskupanId,
@@ -5544,12 +5983,11 @@ typedef $$ParokisTableCreateCompanionBuilder =
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
       Value<bool> isSynced,
-      Value<int> rowid,
     });
 typedef $$ParokisTableUpdateCompanionBuilder =
     ParokisCompanion Function({
-      Value<String> uuid,
-      Value<int?> id,
+      Value<int> id,
+      Value<String?> uuid,
       Value<String> nama,
       Value<String> alamat,
       Value<int> keuskupanId,
@@ -5557,7 +5995,6 @@ typedef $$ParokisTableUpdateCompanionBuilder =
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
       Value<bool> isSynced,
-      Value<int> rowid,
     });
 
 final class $$ParokisTableReferences
@@ -5591,7 +6028,7 @@ final class $$ParokisTableReferences
     final manager = $$DetilJurnalsTableTableManager(
       $_db,
       $_db.detilJurnals,
-    ).filter((f) => f.parokiId.id.sqlEquals($_itemColumn<int>('id')));
+    ).filter((f) => f.parokiId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_detilJurnalsRefsTable($_db));
     return ProcessedTableManager(
@@ -5609,13 +6046,13 @@ class $$ParokisTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<String> get uuid => $composableBuilder(
-    column: $table.uuid,
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get id => $composableBuilder(
-    column: $table.id,
+  ColumnFilters<String> get uuid => $composableBuilder(
+    column: $table.uuid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5707,13 +6144,13 @@ class $$ParokisTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<String> get uuid => $composableBuilder(
-    column: $table.uuid,
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get id => $composableBuilder(
-    column: $table.id,
+  ColumnOrderings<String> get uuid => $composableBuilder(
+    column: $table.uuid,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -5780,11 +6217,11 @@ class $$ParokisTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get uuid =>
-      $composableBuilder(column: $table.uuid, builder: (column) => column);
-
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uuid =>
+      $composableBuilder(column: $table.uuid, builder: (column) => column);
 
   GeneratedColumn<String> get nama =>
       $composableBuilder(column: $table.nama, builder: (column) => column);
@@ -5881,8 +6318,8 @@ class $$ParokisTableTableManager
               $$ParokisTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
-                Value<String> uuid = const Value.absent(),
-                Value<int?> id = const Value.absent(),
+                Value<int> id = const Value.absent(),
+                Value<String?> uuid = const Value.absent(),
                 Value<String> nama = const Value.absent(),
                 Value<String> alamat = const Value.absent(),
                 Value<int> keuskupanId = const Value.absent(),
@@ -5890,10 +6327,9 @@ class $$ParokisTableTableManager
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<bool> isSynced = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
               }) => ParokisCompanion(
-                uuid: uuid,
                 id: id,
+                uuid: uuid,
                 nama: nama,
                 alamat: alamat,
                 keuskupanId: keuskupanId,
@@ -5901,12 +6337,11 @@ class $$ParokisTableTableManager
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
                 isSynced: isSynced,
-                rowid: rowid,
               ),
           createCompanionCallback:
               ({
-                required String uuid,
-                Value<int?> id = const Value.absent(),
+                Value<int> id = const Value.absent(),
+                Value<String?> uuid = const Value.absent(),
                 required String nama,
                 required String alamat,
                 required int keuskupanId,
@@ -5914,10 +6349,9 @@ class $$ParokisTableTableManager
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<bool> isSynced = const Value.absent(),
-                Value<int> rowid = const Value.absent(),
               }) => ParokisCompanion.insert(
-                uuid: uuid,
                 id: id,
+                uuid: uuid,
                 nama: nama,
                 alamat: alamat,
                 keuskupanId: keuskupanId,
@@ -5925,7 +6359,6 @@ class $$ParokisTableTableManager
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
                 isSynced: isSynced,
-                rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map(
@@ -6022,6 +6455,7 @@ typedef $$ParokisTableProcessedTableManager =
 typedef $$JenisTableCreateCompanionBuilder =
     JenisCompanion Function({
       Value<int> id,
+      Value<String?> uuid,
       required String nama,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -6031,6 +6465,7 @@ typedef $$JenisTableCreateCompanionBuilder =
 typedef $$JenisTableUpdateCompanionBuilder =
     JenisCompanion Function({
       Value<int> id,
+      Value<String?> uuid,
       Value<String> nama,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -6072,6 +6507,11 @@ class $$JenisTableFilterComposer extends Composer<_$AppDatabase, $JenisTable> {
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uuid => $composableBuilder(
+    column: $table.uuid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6140,6 +6580,11 @@ class $$JenisTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get uuid => $composableBuilder(
+    column: $table.uuid,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get nama => $composableBuilder(
     column: $table.nama,
     builder: (column) => ColumnOrderings(column),
@@ -6177,6 +6622,9 @@ class $$JenisTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get uuid =>
+      $composableBuilder(column: $table.uuid, builder: (column) => column);
 
   GeneratedColumn<String> get nama =>
       $composableBuilder(column: $table.nama, builder: (column) => column);
@@ -6248,6 +6696,7 @@ class $$JenisTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uuid = const Value.absent(),
                 Value<String> nama = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -6255,6 +6704,7 @@ class $$JenisTableTableManager
                 Value<bool> isSynced = const Value.absent(),
               }) => JenisCompanion(
                 id: id,
+                uuid: uuid,
                 nama: nama,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -6264,6 +6714,7 @@ class $$JenisTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uuid = const Value.absent(),
                 required String nama,
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -6271,6 +6722,7 @@ class $$JenisTableTableManager
                 Value<bool> isSynced = const Value.absent(),
               }) => JenisCompanion.insert(
                 id: id,
+                uuid: uuid,
                 nama: nama,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -6327,6 +6779,7 @@ typedef $$JenisTableProcessedTableManager =
 typedef $$AkunsTableCreateCompanionBuilder =
     AkunsCompanion Function({
       Value<int> id,
+      Value<String?> uuid,
       required String kode,
       required String nama,
       required int jenisId,
@@ -6338,6 +6791,7 @@ typedef $$AkunsTableCreateCompanionBuilder =
 typedef $$AkunsTableUpdateCompanionBuilder =
     AkunsCompanion Function({
       Value<int> id,
+      Value<String?> uuid,
       Value<String> kode,
       Value<String> nama,
       Value<int> jenisId,
@@ -6367,24 +6821,6 @@ final class $$AkunsTableReferences
       manager.$state.copyWith(prefetchedData: [item]),
     );
   }
-
-  static MultiTypedResultKey<$DetilJurnalsTable, List<DetilJurnal>>
-  _detilJurnalsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
-    db.detilJurnals,
-    aliasName: 'akuns__id__detil_jurnals__akun_id',
-  );
-
-  $$DetilJurnalsTableProcessedTableManager get detilJurnalsRefs {
-    final manager = $$DetilJurnalsTableTableManager(
-      $_db,
-      $_db.detilJurnals,
-    ).filter((f) => f.akunId.id.sqlEquals($_itemColumn<int>('id')!));
-
-    final cache = $_typedResult.readTableOrNull(_detilJurnalsRefsTable($_db));
-    return ProcessedTableManager(
-      manager.$state.copyWith(prefetchedData: cache),
-    );
-  }
 }
 
 class $$AkunsTableFilterComposer extends Composer<_$AppDatabase, $AkunsTable> {
@@ -6397,6 +6833,11 @@ class $$AkunsTableFilterComposer extends Composer<_$AppDatabase, $AkunsTable> {
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get uuid => $composableBuilder(
+    column: $table.uuid,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6452,31 +6893,6 @@ class $$AkunsTableFilterComposer extends Composer<_$AppDatabase, $AkunsTable> {
     );
     return composer;
   }
-
-  Expression<bool> detilJurnalsRefs(
-    Expression<bool> Function($$DetilJurnalsTableFilterComposer f) f,
-  ) {
-    final $$DetilJurnalsTableFilterComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.detilJurnals,
-      getReferencedColumn: (t) => t.akunId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$DetilJurnalsTableFilterComposer(
-            $db: $db,
-            $table: $db.detilJurnals,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
 }
 
 class $$AkunsTableOrderingComposer
@@ -6490,6 +6906,11 @@ class $$AkunsTableOrderingComposer
   });
   ColumnOrderings<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get uuid => $composableBuilder(
+    column: $table.uuid,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -6559,6 +6980,9 @@ class $$AkunsTableAnnotationComposer
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
+  GeneratedColumn<String> get uuid =>
+      $composableBuilder(column: $table.uuid, builder: (column) => column);
+
   GeneratedColumn<String> get kode =>
       $composableBuilder(column: $table.kode, builder: (column) => column);
 
@@ -6599,31 +7023,6 @@ class $$AkunsTableAnnotationComposer
     );
     return composer;
   }
-
-  Expression<T> detilJurnalsRefs<T extends Object>(
-    Expression<T> Function($$DetilJurnalsTableAnnotationComposer a) f,
-  ) {
-    final $$DetilJurnalsTableAnnotationComposer composer = $composerBuilder(
-      composer: this,
-      getCurrentColumn: (t) => t.id,
-      referencedTable: $db.detilJurnals,
-      getReferencedColumn: (t) => t.akunId,
-      builder:
-          (
-            joinBuilder, {
-            $addJoinBuilderToRootComposer,
-            $removeJoinBuilderFromRootComposer,
-          }) => $$DetilJurnalsTableAnnotationComposer(
-            $db: $db,
-            $table: $db.detilJurnals,
-            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
-            joinBuilder: joinBuilder,
-            $removeJoinBuilderFromRootComposer:
-                $removeJoinBuilderFromRootComposer,
-          ),
-    );
-    return f(composer);
-  }
 }
 
 class $$AkunsTableTableManager
@@ -6639,7 +7038,7 @@ class $$AkunsTableTableManager
           $$AkunsTableUpdateCompanionBuilder,
           (Akun, $$AkunsTableReferences),
           Akun,
-          PrefetchHooks Function({bool jenisId, bool detilJurnalsRefs})
+          PrefetchHooks Function({bool jenisId})
         > {
   $$AkunsTableTableManager(_$AppDatabase db, $AkunsTable table)
     : super(
@@ -6655,6 +7054,7 @@ class $$AkunsTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uuid = const Value.absent(),
                 Value<String> kode = const Value.absent(),
                 Value<String> nama = const Value.absent(),
                 Value<int> jenisId = const Value.absent(),
@@ -6664,6 +7064,7 @@ class $$AkunsTableTableManager
                 Value<bool> isSynced = const Value.absent(),
               }) => AkunsCompanion(
                 id: id,
+                uuid: uuid,
                 kode: kode,
                 nama: nama,
                 jenisId: jenisId,
@@ -6675,6 +7076,7 @@ class $$AkunsTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> uuid = const Value.absent(),
                 required String kode,
                 required String nama,
                 required int jenisId,
@@ -6684,6 +7086,7 @@ class $$AkunsTableTableManager
                 Value<bool> isSynced = const Value.absent(),
               }) => AkunsCompanion.insert(
                 id: id,
+                uuid: uuid,
                 kode: kode,
                 nama: nama,
                 jenisId: jenisId,
@@ -6698,10 +7101,10 @@ class $$AkunsTableTableManager
                     (e.readTable(table), $$AkunsTableReferences(db, table, e)),
               )
               .toList(),
-          prefetchHooksCallback: ({jenisId = false, detilJurnalsRefs = false}) {
+          prefetchHooksCallback: ({jenisId = false}) {
             return PrefetchHooks(
               db: db,
-              explicitlyWatchedTables: [if (detilJurnalsRefs) db.detilJurnals],
+              explicitlyWatchedTables: [],
               addJoins:
                   <
                     T extends TableManagerState<
@@ -6735,22 +7138,7 @@ class $$AkunsTableTableManager
                     return state;
                   },
               getPrefetchedDataCallback: (items) async {
-                return [
-                  if (detilJurnalsRefs)
-                    await $_getPrefetchedData<Akun, $AkunsTable, DetilJurnal>(
-                      currentTable: table,
-                      referencedTable: $$AkunsTableReferences
-                          ._detilJurnalsRefsTable(db),
-                      managerFromTypedResult: (p0) => $$AkunsTableReferences(
-                        db,
-                        table,
-                        p0,
-                      ).detilJurnalsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.akunId == item.id),
-                      typedResults: items,
-                    ),
-                ];
+                return [];
               },
             );
           },
@@ -6770,7 +7158,7 @@ typedef $$AkunsTableProcessedTableManager =
       $$AkunsTableUpdateCompanionBuilder,
       (Akun, $$AkunsTableReferences),
       Akun,
-      PrefetchHooks Function({bool jenisId, bool detilJurnalsRefs})
+      PrefetchHooks Function({bool jenisId})
     >;
 typedef $$JurnalsTableCreateCompanionBuilder =
     JurnalsCompanion Function({
@@ -6779,6 +7167,7 @@ typedef $$JurnalsTableCreateCompanionBuilder =
       required DateTime tanggal,
       Value<String?> deskripsi,
       Value<String?> noBukti,
+      Value<String> jenisPembatasan,
       Value<int?> createdBy,
       Value<int?> updatedBy,
       Value<int?> deletedBy,
@@ -6795,6 +7184,7 @@ typedef $$JurnalsTableUpdateCompanionBuilder =
       Value<DateTime> tanggal,
       Value<String?> deskripsi,
       Value<String?> noBukti,
+      Value<String> jenisPembatasan,
       Value<int?> createdBy,
       Value<int?> updatedBy,
       Value<int?> deletedBy,
@@ -6872,6 +7262,11 @@ class $$JurnalsTableFilterComposer
 
   ColumnFilters<String> get noBukti => $composableBuilder(
     column: $table.noBukti,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get jenisPembatasan => $composableBuilder(
+    column: $table.jenisPembatasan,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6988,6 +7383,11 @@ class $$JurnalsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get jenisPembatasan => $composableBuilder(
+    column: $table.jenisPembatasan,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get createdBy => $composableBuilder(
     column: $table.createdBy,
     builder: (column) => ColumnOrderings(column),
@@ -7067,6 +7467,11 @@ class $$JurnalsTableAnnotationComposer
 
   GeneratedColumn<String> get noBukti =>
       $composableBuilder(column: $table.noBukti, builder: (column) => column);
+
+  GeneratedColumn<String> get jenisPembatasan => $composableBuilder(
+    column: $table.jenisPembatasan,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get createdBy =>
       $composableBuilder(column: $table.createdBy, builder: (column) => column);
@@ -7171,6 +7576,7 @@ class $$JurnalsTableTableManager
                 Value<DateTime> tanggal = const Value.absent(),
                 Value<String?> deskripsi = const Value.absent(),
                 Value<String?> noBukti = const Value.absent(),
+                Value<String> jenisPembatasan = const Value.absent(),
                 Value<int?> createdBy = const Value.absent(),
                 Value<int?> updatedBy = const Value.absent(),
                 Value<int?> deletedBy = const Value.absent(),
@@ -7185,6 +7591,7 @@ class $$JurnalsTableTableManager
                 tanggal: tanggal,
                 deskripsi: deskripsi,
                 noBukti: noBukti,
+                jenisPembatasan: jenisPembatasan,
                 createdBy: createdBy,
                 updatedBy: updatedBy,
                 deletedBy: deletedBy,
@@ -7201,6 +7608,7 @@ class $$JurnalsTableTableManager
                 required DateTime tanggal,
                 Value<String?> deskripsi = const Value.absent(),
                 Value<String?> noBukti = const Value.absent(),
+                Value<String> jenisPembatasan = const Value.absent(),
                 Value<int?> createdBy = const Value.absent(),
                 Value<int?> updatedBy = const Value.absent(),
                 Value<int?> deletedBy = const Value.absent(),
@@ -7215,6 +7623,7 @@ class $$JurnalsTableTableManager
                 tanggal: tanggal,
                 deskripsi: deskripsi,
                 noBukti: noBukti,
+                jenisPembatasan: jenisPembatasan,
                 createdBy: createdBy,
                 updatedBy: updatedBy,
                 deletedBy: deletedBy,
@@ -7322,6 +7731,9 @@ typedef $$DetilJurnalsTableCreateCompanionBuilder =
       required String jurnalId,
       required int akunId,
       required int parokiId,
+      Value<int?> akunDebitId,
+      Value<int?> akunKreditId,
+      Value<double?> jumlah,
       Value<double?> debit,
       Value<double?> kredit,
       Value<String?> keterangan,
@@ -7339,6 +7751,9 @@ typedef $$DetilJurnalsTableUpdateCompanionBuilder =
       Value<String> jurnalId,
       Value<int> akunId,
       Value<int> parokiId,
+      Value<int?> akunDebitId,
+      Value<int?> akunKreditId,
+      Value<double?> jumlah,
       Value<double?> debit,
       Value<double?> kredit,
       Value<String?> keterangan,
@@ -7405,6 +7820,40 @@ final class $$DetilJurnalsTableReferences
       manager.$state.copyWith(prefetchedData: [item]),
     );
   }
+
+  static $AkunsTable _akunDebitIdTable(_$AppDatabase db) =>
+      db.akuns.createAlias('detil_jurnals__akun_debit_id__akuns__id');
+
+  $$AkunsTableProcessedTableManager? get akunDebitId {
+    final $_column = $_itemColumn<int>('akun_debit_id');
+    if ($_column == null) return null;
+    final manager = $$AkunsTableTableManager(
+      $_db,
+      $_db.akuns,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_akunDebitIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $AkunsTable _akunKreditIdTable(_$AppDatabase db) =>
+      db.akuns.createAlias('detil_jurnals__akun_kredit_id__akuns__id');
+
+  $$AkunsTableProcessedTableManager? get akunKreditId {
+    final $_column = $_itemColumn<int>('akun_kredit_id');
+    if ($_column == null) return null;
+    final manager = $$AkunsTableTableManager(
+      $_db,
+      $_db.akuns,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_akunKreditIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
 }
 
 class $$DetilJurnalsTableFilterComposer
@@ -7418,6 +7867,11 @@ class $$DetilJurnalsTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get jumlah => $composableBuilder(
+    column: $table.jumlah,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7539,6 +7993,52 @@ class $$DetilJurnalsTableFilterComposer
     );
     return composer;
   }
+
+  $$AkunsTableFilterComposer get akunDebitId {
+    final $$AkunsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.akunDebitId,
+      referencedTable: $db.akuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AkunsTableFilterComposer(
+            $db: $db,
+            $table: $db.akuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$AkunsTableFilterComposer get akunKreditId {
+    final $$AkunsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.akunKreditId,
+      referencedTable: $db.akuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AkunsTableFilterComposer(
+            $db: $db,
+            $table: $db.akuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$DetilJurnalsTableOrderingComposer
@@ -7552,6 +8052,11 @@ class $$DetilJurnalsTableOrderingComposer
   });
   ColumnOrderings<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get jumlah => $composableBuilder(
+    column: $table.jumlah,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -7673,6 +8178,52 @@ class $$DetilJurnalsTableOrderingComposer
     );
     return composer;
   }
+
+  $$AkunsTableOrderingComposer get akunDebitId {
+    final $$AkunsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.akunDebitId,
+      referencedTable: $db.akuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AkunsTableOrderingComposer(
+            $db: $db,
+            $table: $db.akuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$AkunsTableOrderingComposer get akunKreditId {
+    final $$AkunsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.akunKreditId,
+      referencedTable: $db.akuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AkunsTableOrderingComposer(
+            $db: $db,
+            $table: $db.akuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$DetilJurnalsTableAnnotationComposer
@@ -7686,6 +8237,9 @@ class $$DetilJurnalsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<double> get jumlah =>
+      $composableBuilder(column: $table.jumlah, builder: (column) => column);
 
   GeneratedColumn<double> get debit =>
       $composableBuilder(column: $table.debit, builder: (column) => column);
@@ -7787,6 +8341,52 @@ class $$DetilJurnalsTableAnnotationComposer
     );
     return composer;
   }
+
+  $$AkunsTableAnnotationComposer get akunDebitId {
+    final $$AkunsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.akunDebitId,
+      referencedTable: $db.akuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AkunsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.akuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$AkunsTableAnnotationComposer get akunKreditId {
+    final $$AkunsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.akunKreditId,
+      referencedTable: $db.akuns,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AkunsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.akuns,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$DetilJurnalsTableTableManager
@@ -7802,7 +8402,13 @@ class $$DetilJurnalsTableTableManager
           $$DetilJurnalsTableUpdateCompanionBuilder,
           (DetilJurnal, $$DetilJurnalsTableReferences),
           DetilJurnal,
-          PrefetchHooks Function({bool jurnalId, bool akunId, bool parokiId})
+          PrefetchHooks Function({
+            bool jurnalId,
+            bool akunId,
+            bool parokiId,
+            bool akunDebitId,
+            bool akunKreditId,
+          })
         > {
   $$DetilJurnalsTableTableManager(_$AppDatabase db, $DetilJurnalsTable table)
     : super(
@@ -7821,6 +8427,9 @@ class $$DetilJurnalsTableTableManager
                 Value<String> jurnalId = const Value.absent(),
                 Value<int> akunId = const Value.absent(),
                 Value<int> parokiId = const Value.absent(),
+                Value<int?> akunDebitId = const Value.absent(),
+                Value<int?> akunKreditId = const Value.absent(),
+                Value<double?> jumlah = const Value.absent(),
                 Value<double?> debit = const Value.absent(),
                 Value<double?> kredit = const Value.absent(),
                 Value<String?> keterangan = const Value.absent(),
@@ -7836,6 +8445,9 @@ class $$DetilJurnalsTableTableManager
                 jurnalId: jurnalId,
                 akunId: akunId,
                 parokiId: parokiId,
+                akunDebitId: akunDebitId,
+                akunKreditId: akunKreditId,
+                jumlah: jumlah,
                 debit: debit,
                 kredit: kredit,
                 keterangan: keterangan,
@@ -7853,6 +8465,9 @@ class $$DetilJurnalsTableTableManager
                 required String jurnalId,
                 required int akunId,
                 required int parokiId,
+                Value<int?> akunDebitId = const Value.absent(),
+                Value<int?> akunKreditId = const Value.absent(),
+                Value<double?> jumlah = const Value.absent(),
                 Value<double?> debit = const Value.absent(),
                 Value<double?> kredit = const Value.absent(),
                 Value<String?> keterangan = const Value.absent(),
@@ -7868,6 +8483,9 @@ class $$DetilJurnalsTableTableManager
                 jurnalId: jurnalId,
                 akunId: akunId,
                 parokiId: parokiId,
+                akunDebitId: akunDebitId,
+                akunKreditId: akunKreditId,
+                jumlah: jumlah,
                 debit: debit,
                 kredit: kredit,
                 keterangan: keterangan,
@@ -7888,7 +8506,13 @@ class $$DetilJurnalsTableTableManager
               )
               .toList(),
           prefetchHooksCallback:
-              ({jurnalId = false, akunId = false, parokiId = false}) {
+              ({
+                jurnalId = false,
+                akunId = false,
+                parokiId = false,
+                akunDebitId = false,
+                akunKreditId = false,
+              }) {
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [],
@@ -7953,6 +8577,36 @@ class $$DetilJurnalsTableTableManager
                                   )
                                   as T;
                         }
+                        if (akunDebitId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.akunDebitId,
+                                    referencedTable:
+                                        $$DetilJurnalsTableReferences
+                                            ._akunDebitIdTable(db),
+                                    referencedColumn:
+                                        $$DetilJurnalsTableReferences
+                                            ._akunDebitIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+                        if (akunKreditId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.akunKreditId,
+                                    referencedTable:
+                                        $$DetilJurnalsTableReferences
+                                            ._akunKreditIdTable(db),
+                                    referencedColumn:
+                                        $$DetilJurnalsTableReferences
+                                            ._akunKreditIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
 
                         return state;
                       },
@@ -7977,7 +8631,13 @@ typedef $$DetilJurnalsTableProcessedTableManager =
       $$DetilJurnalsTableUpdateCompanionBuilder,
       (DetilJurnal, $$DetilJurnalsTableReferences),
       DetilJurnal,
-      PrefetchHooks Function({bool jurnalId, bool akunId, bool parokiId})
+      PrefetchHooks Function({
+        bool jurnalId,
+        bool akunId,
+        bool parokiId,
+        bool akunDebitId,
+        bool akunKreditId,
+      })
     >;
 typedef $$SyncQueuesTableCreateCompanionBuilder =
     SyncQueuesCompanion Function({

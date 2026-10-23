@@ -2,10 +2,10 @@ import '../../local/app_database.dart';
 
 abstract class ParokiRepository {
   Future<List<Paroki>> getAll();
-  Future<Paroki?> getById(int id);
-  Future<int> create({required String nama, required String alamat, required int keuskupanId});
-  Future<void> update(int id, {String? nama, String? alamat, int? keuskupanId});
-  Future<void> delete(int id);
+  Future<Paroki?> getById(String uuid);
+  Future<Paroki?> create({required String nama, required String alamat, required int keuskupanId});
+  Future<void> update(String uuid, {String? nama, String? alamat, int? keuskupanId});
+  Future<void> delete(String uuid);
 }
 
 abstract class KeuskupanRepository {

@@ -42,14 +42,14 @@ class JurnalCubit extends Cubit<JurnalState> {
     }
   }
 
-  Future<String> createJurnal({required int keuskupanId, required DateTime tanggal, String? deskripsi, String? noBukti, List<DetilJurnalsCompanion> detils = const []}) async {
-    final id = await jurnalRepo.create(keuskupanId: keuskupanId, tanggal: tanggal, deskripsi: deskripsi, noBukti: noBukti, detils: detils);
+  Future<String> createJurnal({required int keuskupanId, required DateTime tanggal, String? deskripsi, String? noBukti, String jenisPembatasan = 'Tanpa Pembatasan', List<DetilJurnalsCompanion> detils = const []}) async {
+    final id = await jurnalRepo.create(keuskupanId: keuskupanId, tanggal: tanggal, deskripsi: deskripsi, noBukti: noBukti, jenisPembatasan: jenisPembatasan, detils: detils);
     await load();
     return id;
   }
 
-  Future<void> updateJurnal({required String id, required int keuskupanId, required DateTime tanggal, String? deskripsi, String? noBukti, List<DetilJurnalsCompanion> detils = const []}) async {
-    await jurnalRepo.update(id, keuskupanId: keuskupanId, tanggal: tanggal, deskripsi: deskripsi, noBukti: noBukti, detils: detils);
+  Future<void> updateJurnal({required String id, required int keuskupanId, required DateTime tanggal, String? deskripsi, String? noBukti, String jenisPembatasan = 'Tanpa Pembatasan', List<DetilJurnalsCompanion> detils = const []}) async {
+    await jurnalRepo.update(id, keuskupanId: keuskupanId, tanggal: tanggal, deskripsi: deskripsi, noBukti: noBukti, jenisPembatasan: jenisPembatasan, detils: detils);
     await load();
   }
 

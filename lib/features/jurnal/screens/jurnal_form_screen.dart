@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme.dart';
+import '../../../core/widgets/akun_picker.dart';
 import '../../../data/local/app_database.dart';
 import '../cubit/jurnal_cubit.dart';
 
@@ -17,15 +18,12 @@ class JurnalFormScreen extends StatefulWidget {
   State<JurnalFormScreen> createState() => _JurnalFormScreenState();
 }
 
-/// Jenis transaksi di level jurnal (UI_DESIGN.md §3.2.2)
-enum JenisTransaksi { pendapatan, pengeluaran }
-
+/// Satu baris input double-entry: debit vs kredit + nominal (UI_DESIGN.md §3.2.2)
 class _DetilForm {
-  int? akunId;
-  int? parokiId;
+  int? akunDebitId;
+  int? akunKreditId;
   final nominalCtrl = TextEditingController();
   final ketCtrl = TextEditingController();
-  JenisTransaksi jenis = JenisTransaksi.pendapatan; // default per detil
 }
 
 /// Data untuk tombol "Salin" dari detail jurnal (UI_DESIGN.md §7.3.12)
@@ -61,15 +59,17 @@ class _RibuanFormatter extends TextInputFormatter {
 
 class _JurnalFormScreenState extends State<JurnalFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  static const _draftKey = 'jurnal_draft_v1';
+  static const _draftKey = 'jurnal_draft_v2'; // v1 pakai skema jenis/akunId, tidak kompatibel
   int? _keuskupanId;
   DateTime _tanggal = DateTime.now();
   final _deskripsiCtrl = TextEditingController();
   final _noBuktiCtrl = TextEditingController();
+  String _jenisPembatasan = 'Tanpa Pembatasan';
   bool _saving = false;
   List<Akun> _akuns = [];
   List<Paroki> _parokis = [];
   int? _userParokiId; // Jika login sebagai MEMBER, paroki otomatis ke-lock
+  int? _parokiId; // paroki level-jurnal (DB wajib non-null per detil)
   bool _loadingMaster = true;
   bool _applying = false;
   final List<_DetilForm> _detils = [];
@@ -85,21 +85,10 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
 
   void _addDetil({bool notify = true}) {
     final d = _DetilForm();
-    if (_userParokiId != null && _userParokiId! > 0) {
-      d.parokiId = _userParokiId;
-    }
     d.nominalCtrl.addListener(_onAnyChange);
+    d.ketCtrl.addListener(_onAnyChange);
     _detils.add(d);
     if (notify) setState(() {});
-  }
-
-  void _onJenisChanged() {
-    _onAnyChange();
-  }
-
-  void _removeDetil(int idx) {
-    _detils.removeAt(idx);
-    _onAnyChange();
   }
 
   /// Rebuild (untuk balanced check live) + auto-save draft
@@ -109,25 +98,55 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
     _saveDraft();
   }
 
+  /// Akun picker: bottom sheet lazy ListView (ganti DropdownMenu yang lag saat search).
+  Widget _akunField({
+    required Key key,
+    required String label,
+    required int? selectedId,
+    required void Function(int? id) onSelected,
+    required String? Function() validator,
+  }) {
+    final selected = _akuns.where((a) => a.id == selectedId).toList();
+    return AkunPickerButton(
+      key: key,
+      akuns: _akuns,
+      selected: selected.isEmpty ? null : selected.first,
+      label: label,
+      errorText: validator(),
+      onChanged: (a) {
+        onSelected(a.id);
+        _onAnyChange();
+      },
+    );
+  }
+
   double _parseNomor(String t) => double.tryParse(t.replaceAll('.', '').trim()) ?? 0;
 
   bool get _isDirty =>
       _deskripsiCtrl.text.isNotEmpty ||
       _noBuktiCtrl.text.isNotEmpty ||
       _keuskupanId != null ||
-      _detils.any((d) => d.akunId != null || d.parokiId != null || d.nominalCtrl.text.isNotEmpty);
+      _parokiId != null ||
+      _detils.any((d) => d.akunDebitId != null || d.akunKreditId != null || d.nominalCtrl.text.isNotEmpty || d.ketCtrl.text.isNotEmpty);
 
   // ── Draft auto-save (SharedPreferences, key dibuang setelah simpan) ──
   Future<void> _saveDraft() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_draftKey, jsonEncode({
       'keuskupanId': _keuskupanId,
+      'parokiId': _parokiId,
       'tanggal': _tanggal.toIso8601String(),
       'deskripsi': _deskripsiCtrl.text,
       'noBukti': _noBuktiCtrl.text,
+      'jenisPembatasan': _jenisPembatasan,
       'detils': [
         for (final d in _detils)
-          {'akunId': d.akunId, 'parokiId': d.parokiId, 'nominal': d.nominalCtrl.text, 'jenis': d.jenis.name}
+          {
+            'akunDebitId': d.akunDebitId,
+            'akunKreditId': d.akunKreditId,
+            'nominal': d.nominalCtrl.text,
+            'keterangan': d.ketCtrl.text,
+          }
       ],
     }));
   }
@@ -139,9 +158,11 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
       if (raw == null) return;
       final map = jsonDecode(raw) as Map<String, dynamic>;
       _keuskupanId = map['keuskupanId'] as int?;
+      _parokiId = map['parokiId'] as int?;
       _tanggal = DateTime.tryParse(map['tanggal'] as String? ?? '') ?? DateTime.now();
       _deskripsiCtrl.text = map['deskripsi'] as String? ?? '';
       _noBuktiCtrl.text = map['noBukti'] as String? ?? '';
+      _jenisPembatasan = map['jenisPembatasan'] as String? ?? 'Tanpa Pembatasan';
       final detils = (map['detils'] as List?) ?? const [];
       _detils.clear();
       if (detils.isEmpty) {
@@ -151,10 +172,10 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
           final m = d as Map<String, dynamic>;
           _addDetil(notify: false);
           final f = _detils.last;
-          f.akunId = m['akunId'] as int?;
-          f.parokiId = m['parokiId'] as int?;
+          f.akunDebitId = m['akunDebitId'] as int?;
+          f.akunKreditId = m['akunKreditId'] as int?;
           f.nominalCtrl.text = m['nominal'] as String? ?? '';
-          f.jenis = JenisTransaksi.values.byName(m['jenis'] as String? ?? 'pendapatan');
+          f.ketCtrl.text = m['keterangan'] as String? ?? '';
         }
       }
     } catch (_) {
@@ -189,19 +210,37 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
       _tanggal = j.tanggal;
       _deskripsiCtrl.text = j.deskripsi ?? '';
       _noBuktiCtrl.text = j.noBukti ?? '';
+      _jenisPembatasan = j.jenisPembatasan;
       
-      // Load detils
       final detils = await widget.cubit.jurnalRepo.getDetils(j.id);
+      if (detils.isNotEmpty) _parokiId = detils.first.parokiId;
       _detils.clear();
-      for (final d in detils) {
+      for (var i = 0; i < detils.length;) {
+        final a = detils[i];
+        if (a.jumlah != null || (a.akunDebitId != null && a.akunKreditId != null)) {
+          _addDetil(notify: false);
+          final f = _detils.last;
+          f.akunDebitId = a.akunDebitId;
+          f.akunKreditId = a.akunKreditId;
+          f.nominalCtrl.text = a.jumlah != null && a.jumlah! > 0 ? formatRibuan(a.jumlah!) : '';
+          f.ketCtrl.text = a.keterangan ?? '';
+          i++;
+          continue;
+        }
+        final b = i + 1 < detils.length ? detils[i + 1] : null;
+        final aDebit = (a.debit ?? 0) > 0;
+        final deb = aDebit ? a : b;
+        final kre = aDebit ? b : a;
         _addDetil(notify: false);
         final f = _detils.last;
-        f.akunId = d.akunId;
-        f.parokiId = d.parokiId;
-        final isPendapatan = (d.kredit ?? 0) > 0;
-        f.jenis = isPendapatan ? JenisTransaksi.pendapatan : JenisTransaksi.pengeluaran;
-        f.nominalCtrl.text = (isPendapatan ? (d.kredit ?? 0) : (d.debit ?? 0)) > 0 ? formatRibuan(isPendapatan ? (d.kredit ?? 0) : (d.debit ?? 0)) : '';
+        f.akunDebitId = deb?.akunId;
+        f.akunKreditId = kre?.akunId;
+        final nominal = aDebit ? (a.debit ?? 0) : (a.kredit ?? 0);
+        f.nominalCtrl.text = nominal > 0 ? formatRibuan(nominal) : '';
+        f.ketCtrl.text = a.keterangan ?? '';
+        i += 2;
       }
+      if (_detils.isEmpty) _addDetil(notify: false);
     } else if (widget.prefill != null) {
       // Salin dari jurnal lain: prefill menang, draft lama tidak disentuh
       _applying = true;
@@ -209,16 +248,18 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
       _keuskupanId = p.keuskupanId ?? _keuskupanId;
       _deskripsiCtrl.text = p.deskripsi ?? '';
       _noBuktiCtrl.text = await _generateNoBukti();
+      if (p.detils.isNotEmpty) _parokiId = p.detils.first.parokiId;
       _detils.clear();
-      for (final d in p.detils) {
+      // shortcut: prefill tak bawa sisi debit/kredit, asumsi urutan simpan (debit, kredit); ubah JurnalPrefillDetil bila perlu akurat
+      for (var i = 0; i < p.detils.length; i += 2) {
         _addDetil(notify: false);
         final f = _detils.last;
-        f.akunId = d.akunId;
-        f.parokiId = d.parokiId;
-        // prefill detil pakai nominal, default jenis pendapatan
-        f.jenis = JenisTransaksi.pendapatan;
-        f.nominalCtrl.text = d.nominal > 0 ? formatRibuan(d.nominal) : '';
+        f.akunDebitId = p.detils[i].akunId;
+        f.akunKreditId = i + 1 < p.detils.length ? p.detils[i + 1].akunId : null;
+        final nominal = p.detils[i].nominal;
+        f.nominalCtrl.text = nominal > 0 ? formatRibuan(nominal) : '';
       }
+      if (_detils.isEmpty) _addDetil(notify: false);
     } else {
       await _restoreDraft(); // draft di-restore sebelum build pertama form
       if (_noBuktiCtrl.text.isEmpty) _noBuktiCtrl.text = await _generateNoBukti();
@@ -232,9 +273,9 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
     if (userPid != null && userPid > 0) {
       _userParokiId = userPid;
       parokis = parokis.where((p) => p.id == userPid).toList();
-      for (final d in _detils) {
-        d.parokiId = userPid;
-      }
+      _parokiId = userPid;
+      // MEMBER: keuskupan dikunci -> auto-set dari paroki
+      if (parokis.isNotEmpty) _keuskupanId = parokis.first.keuskupanId;
     }
 
     setState(() {
@@ -246,16 +287,6 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final totalPendapatan = _detils
-        .where((d) => d.jenis == JenisTransaksi.pendapatan)
-        .fold<double>(0, (s, d) => s + _parseNomor(d.nominalCtrl.text));
-    final totalPengeluaran = _detils
-        .where((d) => d.jenis == JenisTransaksi.pengeluaran)
-        .fold<double>(0, (s, d) => s + _parseNomor(d.nominalCtrl.text));
-    final totalNominal = totalPendapatan + totalPengeluaran;
-    final adaNominal = totalNominal > 0;
-    final seimbang = totalPendapatan == totalPengeluaran && adaNominal;
-
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
@@ -298,11 +329,34 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
                         ),
                       ),
                     DropdownButtonFormField<int>(
+                      isExpanded: true,
                       initialValue: _keuskupanId,
-                      decoration: const InputDecoration(labelText: 'Keuskupan *', border: OutlineInputBorder()),
+                      decoration: InputDecoration(
+                        labelText: 'Keuskupan *',
+                        border: const OutlineInputBorder(),
+                        helperText: _userParokiId != null ? 'Keuskupan terkunci untuk akun MEMBER' : null,
+                        helperStyle: const TextStyle(fontSize: 11, color: orangeKhas),
+                      ),
                       items: widget.keuskupans.map((k) => DropdownMenuItem(value: k.id, child: Text(k.nama))).toList(),
-                      onChanged: (v) {
+                      onChanged: _userParokiId != null ? null : (v) {
                         _keuskupanId = v;
+                        _onAnyChange();
+                      },
+                      validator: (v) => v == null ? 'Wajib pilih' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      isExpanded: true,
+                      initialValue: _parokiId,
+                      decoration: InputDecoration(
+                        labelText: 'Paroki *',
+                        border: const OutlineInputBorder(),
+                        helperText: _userParokiId != null ? 'Paroki terkunci untuk akun MEMBER' : null,
+                        helperStyle: const TextStyle(fontSize: 11, color: orangeKhas),
+                      ),
+                      items: _parokis.map((p) => DropdownMenuItem(value: p.id, child: Text(p.nama))).toList(),
+                      onChanged: _userParokiId != null ? null : (v) {
+                        _parokiId = v;
                         _onAnyChange();
                       },
                       validator: (v) => v == null ? 'Wajib pilih' : null,
@@ -320,31 +374,25 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
                         }
                       },
                     ),
-                    // Quick chips tanggal
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        ActionChip(
-                          label: const Text('Hari ini'),
-                          onPressed: () {
-                            _tanggal = DateTime.now();
-                            _onAnyChange();
-                          },
-                        ),
-                        ActionChip(
-                          label: const Text('Kemarin'),
-                          onPressed: () {
-                            _tanggal = DateTime.now().subtract(const Duration(days: 1));
-                            _onAnyChange();
-                          },
-                        ),
-                      ],
-                    ),
+
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _deskripsiCtrl,
-                      decoration: const InputDecoration(labelText: 'Deskripsi', border: OutlineInputBorder()),
+                      decoration: const InputDecoration(labelText: 'Keterangan Transaksi', border: OutlineInputBorder()),
                       maxLines: 2,
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: _jenisPembatasan,
+                      decoration: const InputDecoration(labelText: 'Jenis Pembatasan *', border: OutlineInputBorder()),
+                      items: const [
+                        DropdownMenuItem(value: 'Tanpa Pembatasan', child: Text('Tanpa Pembatasan dari Pemberi Sumber Daya')),
+                        DropdownMenuItem(value: 'Dengan Pembatasan', child: Text('Dengan Pembatasan dari Pemberi Sumber Daya')),
+                      ],
+                      onChanged: (v) {
+                        _jenisPembatasan = v ?? 'Tanpa Pembatasan';
+                        _onAnyChange();
+                      },
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -352,14 +400,8 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
                       decoration: const InputDecoration(labelText: 'No Bukti (unik)', border: OutlineInputBorder()),
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        const Text('Detil Jurnal *', style: TextStyle(fontWeight: FontWeight.bold)),
-                        const Spacer(),
-                        IconButton(icon: const Icon(Icons.add_circle, color: ungu), onPressed: () => _addDetil()),
-                      ],
-                    ),
-                    const Text('Minimal 1 detil, pilih jenis & isi nominal per baris', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                    const Text('Detil Jurnal *', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text('Akun Debit & Kredit harus berbeda', style: TextStyle(fontSize: 11, color: Colors.grey)),
                     const SizedBox(height: 8),
                     ..._detils.asMap().entries.map((entry) {
                       final idx = entry.key;
@@ -370,73 +412,37 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
                           padding: const EdgeInsets.all(12),
                           child: Column(
                             children: [
-                              Row(children: [
-                                Text('Detil ${idx + 1}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                                const Spacer(),
-                                if (_detils.length > 1) IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 20), onPressed: () => _removeDetil(idx)),
-                              ]),
-                              DropdownButtonFormField<int>(
-                                initialValue: d.akunId,
-                                decoration: const InputDecoration(labelText: 'Akun *', border: OutlineInputBorder(), isDense: true),
-                                items: _akuns.map((a) => DropdownMenuItem(value: a.id, child: Text('${a.kode} - ${a.nama}'))).toList(),
-                                onChanged: (v) {
-                                  d.akunId = v;
-                                  _onAnyChange();
-                                },
-                                validator: (v) => v == null ? 'Wajib' : null,
+                              _akunField(
+                                key: ValueKey('deb-$idx-${d.akunDebitId}'),
+                                label: 'Akun Debit *',
+                                selectedId: d.akunDebitId,
+                                onSelected: (id) => d.akunDebitId = id,
+                                validator: () => d.akunDebitId == null ? 'Wajib' : null,
                               ),
-                               const SizedBox(height: 8),
-                               DropdownButtonFormField<int>(
-                                 initialValue: d.parokiId,
-                                 decoration: InputDecoration(
-                                   labelText: 'Paroki *',
-                                   border: const OutlineInputBorder(),
-                                   isDense: true,
-                                   helperText: _userParokiId != null ? 'Paroki terkunci untuk akun MEMBER' : null,
-                                   helperStyle: const TextStyle(fontSize: 11, color: orangeKhas),
-                                 ),
-                                 items: _parokis.map((p) => DropdownMenuItem(value: p.id, child: Text(p.nama))).toList(),
-                                 onChanged: _userParokiId != null ? null : (v) {
-                                   d.parokiId = v;
-                                   _onAnyChange();
-                                 },
-                                 validator: (v) => v == null ? 'Wajib' : null,
-                               ),
                               const SizedBox(height: 8),
-                              // Per-detil jenis transaksi
-                              FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: SegmentedButton<JenisTransaksi>(
-                                  segments: const [
-                                    ButtonSegment(
-                                      value: JenisTransaksi.pendapatan,
-                                      label: Text('Pendapatan', style: TextStyle(fontSize: 12)),
-                                      icon: Icon(Icons.arrow_upward, size: 14),
-                                    ),
-                                    ButtonSegment(
-                                      value: JenisTransaksi.pengeluaran,
-                                      label: Text('Pengeluaran', style: TextStyle(fontSize: 12)),
-                                      icon: Icon(Icons.arrow_downward, size: 14),
-                                    ),
-                                  ],
-                                  selected: {d.jenis},
-                                onSelectionChanged: (s) {
-                                  d.jenis = s.first;
-                                  _onJenisChanged();
+                              _akunField(
+                                key: ValueKey('kre-$idx-${d.akunKreditId}'),
+                                label: 'Akun Kredit *',
+                                selectedId: d.akunKreditId,
+                                onSelected: (id) => d.akunKreditId = id,
+                                validator: () {
+                                  if (d.akunKreditId == null) return 'Wajib';
+                                  if (d.akunKreditId == d.akunDebitId) return 'Tidak boleh sama dengan Akun Debit';
+                                  return null;
                                 },
-                              )),
+                              ),
                               const SizedBox(height: 8),
                               TextFormField(
                                 controller: d.nominalCtrl,
-                                decoration: InputDecoration(
-                                  labelText: d.jenis == JenisTransaksi.pendapatan ? 'Jumlah Pendapatan' : 'Jumlah Pengeluaran',
-                                  border: const OutlineInputBorder(),
+                                decoration: const InputDecoration(
+                                  labelText: 'Nominal *',
+                                  border: OutlineInputBorder(),
                                   isDense: true,
                                   prefixText: 'Rp ',
                                 ),
                                 keyboardType: TextInputType.number,
                                 inputFormatters: [_RibuanFormatter()],
-                                validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
+                                validator: (v) => _parseNomor(v ?? '') > 0 ? null : 'Wajib > 0',
                               ),
                             ],
                           ),
@@ -466,61 +472,70 @@ class _JurnalFormScreenState extends State<JurnalFormScreen> {
     );
   }
 
-  String _ribuan(double v) => formatRibuan(v);
-
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_detils.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Minimal 1 detil')));
+    if (_parokiId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pilih Paroki')));
+      return;
+    }
+    if (_detils.length * 2 < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Minimal 2 detil')));
       return;
     }
     for (final d in _detils) {
-      if (d.akunId == null || d.parokiId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lengkapi Akun & Paroki di semua detil')));
+      if (d.akunDebitId == null || d.akunKreditId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lengkapi Akun Debit & Kredit di semua detil')));
         return;
       }
-      if (_parseNomor(d.nominalCtrl.text) == 0) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Isi Jumlah di semua detil')));
+      if (d.akunDebitId == d.akunKreditId) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Akun Debit & Kredit tidak boleh sama')));
+        return;
+      }
+      if (_parseNomor(d.nominalCtrl.text) <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nominal harus > 0')));
         return;
       }
     }
     setState(() => _saving = true);
     try {
-      final detilsComp = _detils
-          .map((d) {
-            final nominal = _parseNomor(d.nominalCtrl.text);
-            final isPendapatan = d.jenis == JenisTransaksi.pendapatan;
-            return DetilJurnalsCompanion.insert(
-              jurnalId: '',
-              akunId: d.akunId!,
-              parokiId: d.parokiId!,
-              debit: Value(isPendapatan ? 0 : nominal),
-              kredit: Value(isPendapatan ? nominal : 0),
-              keterangan: const Value.absent(),
-            );
-          })
-          .toList();
+      // Setiap detil form -> 1 baris DB (format baru)
+      final detilsComp = <DetilJurnalsCompanion>[];
+      for (final d in _detils) {
+        final nominal = _parseNomor(d.nominalCtrl.text);
+        final ket = d.ketCtrl.text.isEmpty ? null : d.ketCtrl.text;
+        detilsComp.add(DetilJurnalsCompanion.insert(
+          jurnalId: '',
+          akunId: d.akunDebitId!,
+          parokiId: _parokiId!,
+          akunDebitId: Value(d.akunDebitId),
+          akunKreditId: Value(d.akunKreditId),
+          jumlah: Value(nominal),
+          debit: Value(nominal),
+          kredit: const Value(0),
+          keterangan: Value(ket),
+        ));
+      }
       
       if (widget.jurnal != null) {
-        // Edit mode
         await widget.cubit.updateJurnal(
           id: widget.jurnal!.id,
           keuskupanId: _keuskupanId!,
           tanggal: _tanggal,
           deskripsi: _deskripsiCtrl.text.isEmpty ? null : _deskripsiCtrl.text,
           noBukti: _noBuktiCtrl.text.isEmpty ? null : _noBuktiCtrl.text,
+          jenisPembatasan: _jenisPembatasan,
           detils: detilsComp,
         );
         await _clearDraft();
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Jurnal diperbarui ✓ (pending sync)'), backgroundColor: Colors.green));
       } else {
-        // Create mode
         await widget.cubit.createJurnal(
           keuskupanId: _keuskupanId!,
           tanggal: _tanggal,
           deskripsi: _deskripsiCtrl.text.isEmpty ? null : _deskripsiCtrl.text,
           noBukti: _noBuktiCtrl.text.isEmpty ? null : _noBuktiCtrl.text,
+          jenisPembatasan: _jenisPembatasan,
           detils: detilsComp,
         );
         await _clearDraft();

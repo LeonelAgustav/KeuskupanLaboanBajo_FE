@@ -47,6 +47,7 @@ class JurnalRepositoryImpl implements JurnalRepository {
     required DateTime tanggal,
     String? deskripsi,
     String? noBukti,
+    String jenisPembatasan = 'Tanpa Pembatasan',
     List<DetilJurnalsCompanion> detils = const [],
   }) async {
     final userId = await _getUserId();
@@ -60,9 +61,10 @@ class JurnalRepositoryImpl implements JurnalRepository {
         tanggal: tanggal,
         deskripsi: Value(cleanDeskripsi),
         noBukti: Value(cleanNoBukti),
+        jenisPembatasan: Value(jenisPembatasan),
         createdBy: Value(userId),
       ));
-      await db.enqueue('jurnals', id, 'insert', jsonEncode({"id": id, "keuskupan_id": keuskupanId, "tanggal": tanggal.toIso8601String(), "deskripsi": cleanDeskripsi, "no_bukti": cleanNoBukti, "created_by": userId}));
+      await db.enqueue('jurnals', id, 'insert', jsonEncode({"id": id, "keuskupan_id": keuskupanId, "tanggal": tanggal.toIso8601String(), "deskripsi": cleanDeskripsi, "no_bukti": cleanNoBukti, "jenis_pembatasan": jenisPembatasan, "created_by": userId}));
       for (final d in detils) {
         final comp = d.copyWith(jurnalId: Value(id));
         final detilId = (await db.into(db.detilJurnals).insertReturning(comp)).id;
@@ -71,6 +73,9 @@ class JurnalRepositoryImpl implements JurnalRepository {
           "jurnal_id": id,
           "akun_id": comp.akunId.value,
           "paroki_id": comp.parokiId.value,
+          "akun_debit_id": comp.akunDebitId.present ? comp.akunDebitId.value : null,
+          "akun_kredit_id": comp.akunKreditId.present ? comp.akunKreditId.value : null,
+          "jumlah": comp.jumlah.present ? comp.jumlah.value : null,
           "debit": comp.debit.present ? comp.debit.value : 0,
           "kredit": comp.kredit.present ? comp.kredit.value : 0,
           "keterangan": comp.keterangan.present ? comp.keterangan.value : null,
@@ -83,7 +88,7 @@ class JurnalRepositoryImpl implements JurnalRepository {
   }
 
   @override
-  Future<void> update(String id, {int? keuskupanId, DateTime? tanggal, String? deskripsi, String? noBukti, List<DetilJurnalsCompanion>? detils}) async {
+  Future<void> update(String id, {int? keuskupanId, DateTime? tanggal, String? deskripsi, String? noBukti, String? jenisPembatasan, List<DetilJurnalsCompanion>? detils}) async {
     final userId = await _getUserId();
     final cleanDeskripsi = InputSanitizer.sanitizeText(deskripsi);
     final cleanNoBukti = InputSanitizer.sanitizeText(noBukti);
@@ -93,6 +98,7 @@ class JurnalRepositoryImpl implements JurnalRepository {
       tanggal: tanggal != null ? Value(tanggal) : const Value.absent(),
       deskripsi: deskripsi != null ? Value(cleanDeskripsi) : const Value.absent(),
       noBukti: noBukti != null ? Value(cleanNoBukti) : const Value.absent(),
+      jenisPembatasan: jenisPembatasan != null ? Value(jenisPembatasan) : const Value.absent(),
       updatedAt: Value(DateTime.now()),
       updatedBy: Value(userId),
       isSynced: const Value(false),
@@ -117,6 +123,9 @@ class JurnalRepositoryImpl implements JurnalRepository {
           "jurnal_id": id,
           "akun_id": comp.akunId.value,
           "paroki_id": comp.parokiId.value,
+          "akun_debit_id": comp.akunDebitId.present ? comp.akunDebitId.value : null,
+          "akun_kredit_id": comp.akunKreditId.present ? comp.akunKreditId.value : null,
+          "jumlah": comp.jumlah.present ? comp.jumlah.value : null,
           "debit": comp.debit.present ? comp.debit.value : 0,
           "kredit": comp.kredit.present ? comp.kredit.value : 0,
           "keterangan": comp.keterangan.present ? comp.keterangan.value : null,

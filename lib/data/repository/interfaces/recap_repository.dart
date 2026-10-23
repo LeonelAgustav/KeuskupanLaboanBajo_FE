@@ -43,4 +43,24 @@ abstract class RecapRepository {
     int month, {
     int? parokiId,
   });
+
+  /// Neraca Saldo per akun (saldo awal, mutasi, saldo akhir; split per jenis pembatasan).
+  /// Basis untuk Neraca, Laporan Aktivitas, dan Aset Neto.
+  Future<List<NeracaSaldoBaris>> getNeracaSaldo(
+    int keuskupanId,
+    DateTime startDate,
+    DateTime endDate, {
+    int? parokiId,
+  });
+
+  /// Buku Besar: saldo awal, mutasi, saldo akhir untuk satu akun dalam range tanggal.
+  /// Running balance mengikuti sisi normal akun (kode awalan 1/5: debit; 2/3/4: kredit).
+  /// [parokiId] jika > 0, filter hanya ke paroki tertentu.
+  Future<BukuBesarResult> getBukuBesar(
+    int keuskupanId,
+    int akunId,
+    DateTime startDate,
+    DateTime endDate, {
+    int? parokiId,
+  });
 }

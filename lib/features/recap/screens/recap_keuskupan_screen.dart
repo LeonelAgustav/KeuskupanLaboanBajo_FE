@@ -1,71 +1,95 @@
-import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
+
 import '../../../core/auth/token_storage.dart';
 import '../../../core/security/screenshot_guard.dart';
+import '../../../core/theme.dart';
+import '../../../core/widgets/akun_picker.dart';
 import '../../../data/local/app_database.dart';
-import '../../../data/models/recap_models.dart';
 import '../../../data/repository/impl/master_repository_impl.dart';
-import '../../../data/repository/impl/recap_repository_impl.dart';
 import '../widgets/recap_widgets.dart';
-import '../utils/pdf_export.dart';
-import 'recap_paroki_detail_screen.dart';
+import 'buku_besar_screen.dart';
+import 'laporan_isak35_screen.dart';
 
 class RecapKeuskupanScreen extends StatefulWidget {
   final AppDatabase? db;
   final TokenStorageI? tokenStorage;
+
   const RecapKeuskupanScreen({super.key, this.db, this.tokenStorage});
+
   @override
   State<RecapKeuskupanScreen> createState() => _RecapKeuskupanScreenState();
 }
 
 class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
   late final AppDatabase _db = widget.db ?? AppDatabase();
-  late final RecapRepositoryImpl _recapRepo = RecapRepositoryImpl(_db);
-  late final KeuskupanRepositoryImpl _keuskupanRepo = KeuskupanRepositoryImpl(_db);
-  bool _ownsDb = false;
+  late final KeuskupanRepositoryImpl _keuskupanRepo = KeuskupanRepositoryImpl(
+    _db,
+  );
+  late final AkunRepositoryImpl _akunRepo = AkunRepositoryImpl(_db);
+  late final bool _ownsDb = widget.db == null;
 
-  DateTime _selectedDate = DateTime(DateTime.now().year, DateTime.now().month);
-  PeriodMode _mode = PeriodMode.month;
   Keuskupan? _selectedKeuskupan;
-  List<Keuskupan> _keuskupanList = [];
-  int? _memberParokiId; // untuk MEMBER: filter hanya 1 paroki
+  List<Keuskupan> _keuskupans = [];
+  List<Akun> _akuns = [];
+  int? _selectedAkunId;
+  int? _memberParokiId;
+  int? _memberKeuskupanId;
   String? _memberParokiNama;
-
+  DateTime _startMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  DateTime _endMonth = DateTime(DateTime.now().year, DateTime.now().month);
   bool _loading = true;
   String? _error;
-  RecapKeuskupanResult? _recapResult;
-  List<RecapParokiSummary> _parokiList = [];
-  List<MonthlyRecap> _monthlyData = [];
-  List<WeeklyRecap> _weeklyData = [];
+
+  DateTime get _startDate => DateTime(_startMonth.year, _startMonth.month, 1);
+  DateTime get _endDate => DateTime(_endMonth.year, _endMonth.month + 1, 1);
 
   @override
   void initState() {
     super.initState();
     ScreenshotGuard.setSecure(true);
-    _ownsDb = widget.db == null;
     _boot();
   }
 
   Future<void> _boot() async {
-    await _initMemberFilter();
-    await _loadData();
+    try {
+      await _loadMemberScope();
+      final results = await Future.wait([
+        _keuskupanRepo.getAll(),
+        _akunRepo.getAll(),
+      ]);
+      if (!mounted) return;
+
+      _keuskupans = results[0] as List<Keuskupan>;
+      _akuns = results[1] as List<Akun>;
+      if (_keuskupans.isNotEmpty) {
+        _selectedKeuskupan = _memberKeuskupanId == null
+            ? _keuskupans.first
+            : _keuskupans
+                  .where((k) => k.id == _memberKeuskupanId)
+                  .firstOrNull;
+      }
+      setState(() => _loading = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
   }
 
-  Future<void> _initMemberFilter() async {
-    final ts = widget.tokenStorage;
-    if (ts == null) return;
-    try {
-      final pid = await ts.getCurrentParokiId();
-      if (pid != null && pid > 0) _memberParokiId = pid;
-      // Ambil nama paroki dari DB lokal
-      if (_memberParokiId != null) {
-        final rows = await _db.customSelect(
-          'SELECT nama FROM parokis WHERE id = ? AND deleted_at IS NULL',
-          variables: [Variable.withInt(_memberParokiId!)],
-        ).get();
-        if (rows.isNotEmpty) _memberParokiNama = rows.first.read<String>('nama');
-      }
-    } catch (_) {}
+  Future<void> _loadMemberScope() async {
+    final parokiId = await widget.tokenStorage?.getCurrentParokiId();
+    if (parokiId == null || parokiId <= 0) return;
+
+    final paroki = await (_db.select(
+      _db.parokis,
+    )..where((p) => p.id.equals(parokiId))).getSingleOrNull();
+    if (paroki == null) return;
+
+    _memberParokiId = paroki.id;
+    _memberKeuskupanId = paroki.keuskupanId;
+    _memberParokiNama = paroki.nama;
   }
 
   @override
@@ -75,292 +99,255 @@ class _RecapKeuskupanScreenState extends State<RecapKeuskupanScreen> {
     super.dispose();
   }
 
-  DateTime get _startDate {
-    if (_mode == PeriodMode.year) {
-      return DateTime(_selectedDate.year, 1, 1);
-    }
-    return DateTime(_selectedDate.year, _selectedDate.month, 1);
-  }
-
-  DateTime get _endDate {
-    if (_mode == PeriodMode.year) {
-      return DateTime(_selectedDate.year + 1, 1, 1);
-    }
-    return DateTime(_selectedDate.year, _selectedDate.month + 1, 1);
-  }
-
-  Future<void> _loadData() async {
-    setState(() { _loading = true; _error = null; });
-    try {
-      // Load keuskupan list if first time
-      if (_keuskupanList.isEmpty) {
-        _keuskupanList = await _keuskupanRepo.getAll();
-        if (_keuskupanList.isNotEmpty && _selectedKeuskupan == null) {
-          _selectedKeuskupan = _keuskupanList.first;
-        }
-      }
-
-      if (_selectedKeuskupan == null) {
-        setState(() { _loading = false; });
-        return;
-      }
-
-      final recap = await _recapRepo.getKeuskupanRecap(
-        _selectedKeuskupan!.id, _startDate, _endDate,
-        parokiId: _memberParokiId,
+  void _openBukuBesar() {
+    if (_selectedKeuskupan == null || _selectedAkunId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pilih keuskupan dan akun terlebih dahulu')),
       );
-      final parokiList = await _recapRepo.getParokiRecapList(
-        _selectedKeuskupan!.id, _startDate, _endDate,
-        parokiId: _memberParokiId,
-      );
-
-      // Load monthly data for yearly mode, weekly for monthly mode
-      List<MonthlyRecap> monthlyData = [];
-      List<WeeklyRecap> weeklyData = [];
-      if (_mode == PeriodMode.year) {
-        monthlyData = await _recapRepo.getMonthlyRecap(
-          _selectedKeuskupan!.id, _selectedDate.year,
-          parokiId: _memberParokiId,
-        );
-      } else {
-        weeklyData = await _recapRepo.getWeeklyRecap(
-          _selectedKeuskupan!.id, _selectedDate.year, _selectedDate.month,
-          parokiId: _memberParokiId,
-        );
-      }
-
-      setState(() {
-        _recapResult = recap;
-        _parokiList = parokiList;
-        _monthlyData = monthlyData;
-        _weeklyData = weeklyData;
-        _loading = false;
-      });
-    } catch (e) {
-      setState(() { _error = e.toString(); _loading = false; });
+      return;
     }
-  }
+    if (_startDate.isAfter(_endMonth)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bulan awal tidak boleh setelah bulan akhir')),
+      );
+      return;
+    }
 
-  void _changeDate(DateTime newDate) {
-    _selectedDate = newDate;
-    _loadData();
-  }
-
-  void _toggleMode(PeriodMode mode) {
-    _mode = mode;
-    _loadData();
-  }
-
-  void _goToParokiDetail(RecapParokiSummary paroki) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => RecapParokiDetailScreen(
-        parokiId: paroki.parokiId,
-        parokiNama: paroki.parokiNama,
-        selectedDate: _selectedDate,
-        mode: _mode,
-        db: _db,
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BukuBesarScreen(
+          keuskupanId: _selectedKeuskupan!.id,
+          parokiId: _memberParokiId,
+          akunId: _selectedAkunId,
+          startDate: _startDate,
+          endDate: _endDate,
+          db: _db,
+        ),
       ),
-    ));
+    );
   }
 
-  // ── Build ───────────────────────────────────────────────────────────────
+  void _openLaporan(int tab) {
+    if (_selectedKeuskupan == null) return;
+    if (_startDate.isAfter(_endMonth)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bulan awal tidak boleh setelah bulan akhir')),
+      );
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => LaporanISAK35Screen(
+          keuskupanId: _selectedKeuskupan!.id,
+          parokiId: _memberParokiId,
+          startDate: _startDate,
+          endDate: _endDate,
+          initialTab: tab,
+          db: _db,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_memberParokiNama != null ? 'Rekap $_memberParokiNama' : 'Rekap Keuskupan'),
-        actions: [
-          if (_recapResult != null)
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf),
-              tooltip: 'Export PDF',
-              onPressed: () => exportLaporanPdf(
-                judul: 'Laporan Keuangan Keuskupan',
-                periode: _mode == PeriodMode.year
-                    ? '${_selectedDate.year}'
-                    : '${monthNamesId[_selectedDate.month - 1]} ${_selectedDate.year}',
-                baris: [
-                  for (final p in _parokiList) PdfBaris(p.parokiNama, debit: p.totalDebit, kredit: p.totalKredit),
-                ],
-                totalDebit: _recapResult!.totalDebit,
-                totalKredit: _recapResult!.totalKredit,
-              ),
-            ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
-          ),
-        ],
+        title: Text(
+          _memberParokiNama == null ? 'Rekap' : 'Rekap $_memberParokiNama',
+        ),
       ),
       body: _buildBody(),
     );
   }
 
   Widget _buildBody() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 48),
-            const SizedBox(height: 12),
-            Text('Error: $_error', textAlign: TextAlign.center),
-            const SizedBox(height: 12),
-            ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
-          ],
-        ),
-      );
+      return Center(child: Text('Error: $_error', textAlign: TextAlign.center));
     }
     if (_selectedKeuskupan == null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+      return const Center(child: Text('Belum ada data keuskupan'));
+    }
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 720),
+        child: ListView(
+          padding: const EdgeInsets.all(16),
           children: [
-            Icon(Icons.church, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
             Text(
-              'Belum ada data Keuskupan',
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              'Filter Laporan',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Tambahkan data lewat menu Master',
-              style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-              textAlign: TextAlign.center,
+            const SizedBox(height: 16),
+            DropdownButtonFormField<int>(
+              initialValue: _selectedKeuskupan!.id,
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: 'Keuskupan',
+                border: const OutlineInputBorder(),
+                helperText: _memberKeuskupanId == null
+                    ? null
+                    : 'Keuskupan terkunci untuk akun MEMBER',
+              ),
+              items: _keuskupans
+                  .map(
+                    (k) => DropdownMenuItem(
+                      value: k.id,
+                      child: Text(k.nama, overflow: TextOverflow.ellipsis),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _memberKeuskupanId != null
+                  ? null
+                  : (id) => setState(() {
+                      _selectedKeuskupan = _keuskupans.firstWhere(
+                        (k) => k.id == id,
+                      );
+                    }),
+            ),
+            const SizedBox(height: 16),
+            AkunPickerButton(
+              akuns: _akuns,
+              selected: _selectedAkunId != null
+                  ? _akuns.cast<Akun?>().firstWhere((a) => a?.id == _selectedAkunId, orElse: () => null)
+                  : null,
+              label: 'Akun *',
+              onChanged: (a) => setState(() => _selectedAkunId = a.id),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _MonthField(
+                    label: 'Bulan Awal',
+                    value: _startMonth,
+                    onChanged: (date) => setState(() => _startMonth = date),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _MonthField(
+                    label: 'Bulan Akhir',
+                    value: _endMonth,
+                    onChanged: (date) => setState(() => _endMonth = date),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _ReportButton(
+              icon: Icons.menu_book,
+              label: 'Buku Besar',
+              onPressed: _openBukuBesar,
+              backgroundColor: successGreen,
+            ),
+            const SizedBox(height: 24),
+            _ReportButton(
+              icon: Icons.balance,
+              label: 'Neraca Saldo',
+              onPressed: () => _openLaporan(0),
+            ),
+            const SizedBox(height: 10),
+            _ReportButton(
+              icon: Icons.account_balance,
+              label: 'Neraca',
+              onPressed: () => _openLaporan(1),
+            ),
+            const SizedBox(height: 10),
+            _ReportButton(
+              icon: Icons.trending_up,
+              label: 'Laporan Aktivitas',
+              onPressed: () => _openLaporan(2),
+            ),
+            const SizedBox(height: 10),
+            _ReportButton(
+              icon: Icons.savings,
+              label: 'Aset Neto',
+              onPressed: () => _openLaporan(3),
             ),
           ],
         ),
-      );
-    }
+      ),
+    );
+  }
+}
 
-    // ponytail: 1 codebase app+web -> web centered max 900
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 900),
-          child: ListView(
-            children: [
-          // Keuskupan dropdown (if multiple)
-          if (_keuskupanList.length > 1)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: DropdownButtonFormField<int>(
-                initialValue: _selectedKeuskupan!.id,
-                decoration: const InputDecoration(
-                  labelText: 'Keuskupan',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-                items: _keuskupanList.map((k) => DropdownMenuItem(
-                  value: k.id,
-                  child: Text(k.nama),
-                )).toList(),
-                onChanged: (val) {
-                  _selectedKeuskupan = _keuskupanList.firstWhere((k) => k.id == val);
-                  _loadData();
-                },
-              ),
-            ),
+class _MonthField extends StatelessWidget {
+  final String label;
+  final DateTime value;
+  final ValueChanged<DateTime> onChanged;
 
-          // Period picker
-          MonthYearPicker(
-            selectedDate: _selectedDate,
-            onDateChanged: _changeDate,
-            mode: _mode,
-            onModeChanged: _toggleMode,
+  const _MonthField({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InputDecorator(
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Bulan sebelumnya',
+            onPressed: () => onChanged(DateTime(value.year, value.month - 1)),
+            icon: const Icon(Icons.chevron_left),
           ),
-
-          // Summary cards
-          if (_recapResult != null)
-            SummaryRow(
-              totalPendapatan: _recapResult!.totalKredit, // Pendapatan = Kredit
-              totalPengeluaran: _recapResult!.totalDebit, // Pengeluaran = Debit
+          Expanded(
+            child: Text(
+              '${monthNamesId[value.month - 1]} ${value.year}',
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
-
-          const SizedBox(height: 16),
-
-          // Weekly table for monthly mode (PRIORITAS ATAS)
-          if (_mode == PeriodMode.month && _weeklyData.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'Rekap Mingguan (${monthNamesId[_selectedDate.month - 1]} ${_selectedDate.year})',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[700],
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            WeeklyRecapTable(
-              weeklyData: _weeklyData,
-              totalPendapatan: _recapResult?.totalKredit ?? 0,
-              totalPengeluaran: _recapResult?.totalDebit ?? 0,
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          // Monthly table for yearly mode (PRIORITAS ATAS)
-          if (_mode == PeriodMode.year && _monthlyData.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'Rekap Bulanan (${_selectedDate.year})',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[700],
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            MonthlyRecapTable(
-              monthlyData: _monthlyData,
-              totalPendapatan: _recapResult?.totalKredit ?? 0,
-              totalPengeluaran: _recapResult?.totalDebit ?? 0,
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          // Rekap Per Paroki (HANYA untuk non-MEMBER)
-          if (_memberParokiId == null) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'Rekap Per Paroki',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[700],
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Paroki list
-            if (_parokiList.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(32),
-                child: Center(
-                  child: Text(
-                    'Tidak ada paroki pada keuskupan ini',
-                    style: TextStyle(color: Colors.grey[500]),
-                  ),
-                ),
-              )
-            else
-              ..._parokiList.map((p) => ParokiRecapCard(
-                summary: p,
-                onTap: () => _goToParokiDetail(p),
-              )),
-          ],
-
-          const SizedBox(height: 80), // padding for FAB
-            ],
           ),
+          IconButton(
+            tooltip: 'Bulan berikutnya',
+            onPressed: () => onChanged(DateTime(value.year, value.month + 1)),
+            icon: const Icon(Icons.chevron_right),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReportButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+  final Color? backgroundColor;
+
+  const _ReportButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.backgroundColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.tonalIcon(
+      onPressed: onPressed,
+      style: backgroundColor != null
+          ? FilledButton.styleFrom(backgroundColor: backgroundColor)
+          : null,
+      icon: Icon(icon),
+      label: Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Text(label),
         ),
       ),
     );
