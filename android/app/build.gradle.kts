@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.keuskupanlaboanbajo_fe"
+    namespace = "com.binus.keuskupanlaboanbajo"
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
@@ -20,7 +20,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.keuskupanlaboanbajo_fe"
+        applicationId = "com.binus.keuskupanlaboanbajo"
         // ponytail: Android 12+ (API 31), compile 35 biar jalan di 12-15
         minSdk = 31
         targetSdk = 35

@@ -1,4 +1,4 @@
-package com.example.keuskupanlaboanbajo_fe
+package com.binus.keuskupanlaboanbajo
 
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
